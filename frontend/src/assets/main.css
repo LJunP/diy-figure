@@ -1,0 +1,230 @@
+/* ===== 全局样式重置 ===== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #app {
+  height: 100%;
+  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', '微软雅黑', Arial, sans-serif;
+  color: #e8e8e8;
+  background-color: #0d0d0d;
+  scroll-behavior: smooth;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+/* ===== 滚动条样式 ===== */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* ===== 页面过渡动画 ===== */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.4s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* ===== 通用动画 ===== */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* ===== 工具类 ===== */
+.text-gradient {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* ===== Element Plus 深色主题覆盖 ===== */
+.el-card {
+  background-color: #1a1a1a !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  color: #e8e8e8 !important;
+}
+
+.el-card__header {
+  border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+  color: #e8e8e8 !important;
+}
+
+.el-table {
+  background-color: transparent !important;
+  color: #e8e8e8 !important;
+}
+
+.el-table th.el-table__cell {
+  background-color: rgba(255, 255, 255, 0.03) !important;
+  color: #aaa !important;
+  border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.el-table tr {
+  background-color: transparent !important;
+}
+
+.el-table td.el-table__cell {
+  border-bottom-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
+  background-color: rgba(255, 255, 255, 0.02) !important;
+}
+
+.el-table__body tr:hover > td.el-table__cell {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+.el-descriptions {
+  --el-descriptions-item-bordered-label-background: rgba(255,255,255,0.03);
+}
+
+.el-descriptions__label {
+  color: #aaa !important;
+}
+
+.el-descriptions__content {
+  color: #e8e8e8 !important;
+}
+
+.el-divider {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.el-divider__text {
+  background-color: #1a1a1a !important;
+  color: #aaa !important;
+}
+
+.el-input__wrapper,
+.el-textarea__inner {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1) inset !important;
+}
+
+.el-input__inner {
+  color: #e8e8e8 !important;
+}
+
+.el-input__inner::placeholder {
+  color: #666 !important;
+}
+
+.el-select .el-input__wrapper {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+.el-radio-button__inner {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  color: #e8e8e8 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.el-radio-button__original:checked + .el-radio-button__inner {
+  background-color: #667eea !important;
+  border-color: #667eea !important;
+}
+
+.el-empty__description p {
+  color: #666 !important;
+}
+
+.el-tabs__item {
+  color: #888 !important;
+}
+
+.el-tabs__item.is-active {
+  color: #667eea !important;
+}
+
+.el-tabs__active-bar {
+  background-color: #667eea !important;
+}
+
+.el-tabs__nav-wrap::after {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.el-dialog {
+  background-color: #1a1a1a !important;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.el-dialog__title {
+  color: #e8e8e8 !important;
+}
+
+.el-form-item__label {
+  color: #ccc !important;
+}
+
+.el-alert {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.el-statistic__head {
+  color: #888 !important;
+}
+
+.el-statistic__content {
+  color: #e8e8e8 !important;
+}
+
+.el-menu {
+  border-right: none !important;
+}
+
+.el-progress__text {
+  color: #e8e8e8 !important;
+}
+
+.el-progress-bar__outer {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}

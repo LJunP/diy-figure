@@ -1,0 +1,71 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+spring:
+  profiles:
+    active: dev
+
+  jackson:
+    # JSON 使用驼峰命名(Java/JS 变量用驼峰,数据库字段用下划线,互不干扰)
+    default-property-inclusion: NON_NULL
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+
+  jpa:
+    hibernate:
+      # 开发环境自动建表,生产环境应改为 validate 或 none 并使用 Flyway
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQLDialect
+
+  servlet:
+    multipart:
+      # 文件上传限制:单文件 50MB,总请求 100MB(用户上传参考图、AI 生成图片)
+      max-file-size: 50MB
+      max-request-size: 100MB
+
+# JWT 配置
+jwt:
+  # 密钥:生产环境必须替换为安全的随机密钥,并通过环境变量注入
+  secret: diy-figure-jwt-secret-key-please-change-in-production-2024
+  # token 有效期:7 天(单位毫秒)
+  expiration: 604800000
+  # token 在请求头中的前缀
+  header: Authorization
+  prefix: "Bearer "
+
+# 阿里云 OSS 配置
+oss:
+  endpoint: oss-cn-hongkong.aliyuncs.com
+  access-key-id: ${OSS_ACCESS_KEY_ID:your-access-key-id}
+  access-key-secret: ${OSS_ACCESS_KEY_SECRET:your-access-key-secret}
+  bucket-name: ${OSS_BUCKET_NAME:diy-figure}
+  # 文件访问域名前缀
+  domain: https://${OSS_BUCKET_NAME:diy-figure}.oss-cn-hongkong.aliyuncs.com
+
+# AI 服务配置(Phase 3 使用)
+ai:
+  openai:
+    api-key: ${OPENAI_API_KEY:your-openai-api-key}
+    base-url: https://api.openai.com/v1
+    # GPT-4o 对话模型
+    chat-model: gpt-4o
+    # DALL-E 3 图片生成模型
+    image-model: dall-e-3
+  meshy:
+    api-key: ${MESHY_API_KEY:your-meshy-api-key}
+    base-url: https://api.meshy.ai
+
+# 日志配置
+logging:
+  level:
+    com.diyfigure: debug
+    org.hibernate.SQL: debug
+    org.hibernate.type.descriptor.sql.BasicBinder: trace
