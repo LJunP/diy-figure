@@ -41,7 +41,8 @@ public class OssConfig {
     @PostConstruct
     public void init() {
         // 在密钥为占位值时不初始化客户端,避免启动报错
-        if (accessKeyId.contains("your-access-key-id")) {
+        if (!com.diyfigure.common.util.ExternalKeys.isConfigured(accessKeyId)
+                || !com.diyfigure.common.util.ExternalKeys.isConfigured(accessKeySecret)) {
             log.warn("OSS 密钥未配置,跳过 OSS 客户端初始化。请设置环境变量 OSS_ACCESS_KEY_ID 和 OSS_ACCESS_KEY_SECRET");
             return;
         }

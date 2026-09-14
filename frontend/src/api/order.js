@@ -62,6 +62,39 @@ export function drawLottery(orderId) {
 }
 
 /**
+ * 终审拒绝后重新提交(REVIEW_REJECTED → DRAFT_SUBMIT_PENDING)
+ */
+export function resubmitOrder(orderId) {
+  return request({
+    url: `/orders/${orderId}/resubmit`,
+    method: 'post'
+  })
+}
+
+/**
+ * 重新打开已关闭订单(CLOSED → DRAFT_SUBMIT_PENDING)
+ */
+export function reopenOrder(orderId) {
+  return request({
+    url: `/orders/${orderId}/reopen`,
+    method: 'post'
+  })
+}
+
+/**
+ * 提交终审(DRAFT_SUBMIT_PENDING → REVIEWING)
+ *
+ * 返工闭环的最后一环:resubmit / reopen 只把订单放回草稿态,
+ * 必须再调一次这个接口才会重新进入运营的终审队列。
+ */
+export function submitForReview(orderId) {
+  return request({
+    url: `/orders/${orderId}/submit-review`,
+    method: 'post'
+  })
+}
+
+/**
  * 绑定收货地址
  */
 export function bindOrderAddress(orderId, addressId) {

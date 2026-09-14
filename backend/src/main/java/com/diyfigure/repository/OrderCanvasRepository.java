@@ -34,4 +34,9 @@ public interface OrderCanvasRepository extends JpaRepository<OrderCanvas, Long> 
      * 查询某抽奖结果的所有记录(定时任务扫描未中签角色用)
      */
     List<OrderCanvas> findByLotteryResult(LotteryResult lotteryResult);
+
+    /**
+     * 判断某画布是否已被订单引用(用于删除保护)
+     */
+    boolean existsByCanvasId(Long canvasId);
 }

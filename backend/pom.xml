@@ -95,6 +95,22 @@
             <version>2.3.1</version>
         </dependency>
 
+        <!-- 邮件通知:未配置 SMTP 时自动降级为只记日志,不影响主流程 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+
+        <!-- 数据库版本迁移(Flyway):表结构由 db/migration 下的脚本维护 -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-mysql</artifactId>
+        </dependency>
+
         <!-- Spring Boot Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

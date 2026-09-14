@@ -14,6 +14,8 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 import java.util.stream.Collectors;
 
@@ -101,12 +103,21 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 兜底:未预期的异常
+     * 乐观锁冲突:并发抽奖、支付回调等同时写入同一行
+     */
+    @ExceptionHandler({ObjectOptimisticLockingFailureException.class, OptimisticLockingFailureException.class})
+    public ApiResponse<Void> handleOptimisticLock(RuntimeException e) {
+        log.warn("乐观锁冲突: {}", e.getMessage());
+        return ApiResponse.error(ResultCode.CONFLICT, "数据已被他人修改,请刷新后重试");
+    }
+
+    /**
+     * 兜底:未预期的异常。不把内部异常信息回给前端。
      */
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ApiResponse<Void> handleUnexpected(Exception e) {
         log.error("系统内部错误", e);
-        return ApiResponse.error(ResultCode.INTERNAL_ERROR, e.getMessage());
+        return ApiResponse.error(ResultCode.INTERNAL_ERROR);
     }
 }

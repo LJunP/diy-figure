@@ -62,7 +62,19 @@ public class Payment {
     @Column(name = "paid_at")
     private LocalDateTime paidAt;
 
+    /** 取消后退款记账时间。真实渠道退款仍需商户号,这里只落账。 */
+    @Column(name = "refunded_at")
+    private LocalDateTime refundedAt;
+
+    @Column(name = "refund_amount", precision = 10, scale = 2)
+    private BigDecimal refundAmount;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
+
+    /** 乐观锁:防止支付回调与手动模拟并发造成重复入账 */
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 }

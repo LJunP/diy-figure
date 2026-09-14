@@ -15,6 +15,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 
 /**
  * 画布控制器
@@ -34,8 +35,16 @@ public class CanvasController {
 
     private final CanvasService canvasService;
 
-    /** 用于异步执行 SSE 对话的线程池 */
-    private final ExecutorService sseExecutor = Executors.newCachedThreadPool();
+    private final ExecutorService sseExecutor = Executors.newFixedThreadPool(16, new ThreadFactory() {
+        private int seq = 0;
+
+        @Override
+        public Thread newThread(Runnable r) {
+            Thread t = new Thread(r, "sse-chat-" + (++seq));
+            t.setDaemon(true);
+            return t;
+        }
+    });
 
     /**
      * 在系列下创建新画布
@@ -81,7 +90,7 @@ public class CanvasController {
      */
     @PostMapping(value = "/canvases/{id}/chat", produces = "text/event-stream;charset=UTF-8")
     public SseEmitter chat(@PathVariable Long id,
-                           @RequestBody ChatRequest body,
+                           @Valid @RequestBody ChatRequest body,
                            HttpServletRequest request) {
         Long userId = (Long) request.getAttribute(JwtInterceptor.CURRENT_USER_ID);
 
@@ -111,6 +120,15 @@ public class CanvasController {
     public ApiResponse<Canvas> finalizeCanvas(@PathVariable Long id, HttpServletRequest request) {
         Long userId = (Long) request.getAttribute(JwtInterceptor.CURRENT_USER_ID);
         return ApiResponse.success(canvasService.finalizeCanvas(id, userId));
+    }
+
+    /**
+     * 重新生成 3D 参考模型(仅生成失败后可重试)
+     */
+    @PostMapping("/canvases/{id}/model3d/retry")
+    public ApiResponse<CanvasDetailResponse> retryModel3d(@PathVariable Long id, HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute(JwtInterceptor.CURRENT_USER_ID);
+        return ApiResponse.success(canvasService.retryModel3d(id, userId));
     }
 
     /**

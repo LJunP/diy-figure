@@ -34,3 +34,19 @@ export function getUserInfo() {
 export function updatePassword(data) {
   return request.put('/auth/password', data)
 }
+
+export function verifyEmail(token) {
+  return request.post('/auth/verify-email', { token })
+}
+
+export function resendVerification(email) {
+  return request.post('/auth/resend-verification', { email })
+}
+
+export function forgotPassword(email) {
+  return request.post('/auth/forgot-password', { email })
+}
+
+export function resetPassword(data) {
+  return request.post('/auth/reset-password', data)
+}

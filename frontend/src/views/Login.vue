@@ -1,18 +1,18 @@
 <template>
   <div class="login-page">
-    <!-- 背景效果 -->
-    <div class="login-bg">
-      <div class="bg-gradient"></div>
-      <div class="bg-particles"></div>
-    </div>
+    <AmbientBackground />
 
-    <div class="login-container">
+    <div class="login-container glass-strong" :class="{ loading }">
+      <!-- 渐变描边光 -->
+      <div class="border-glow"></div>
+
       <!-- 左侧品牌区 -->
       <div class="brand-side">
         <div class="brand-content">
           <div class="brand-logo">
             <span class="logo-icon">DIY</span>
             <span class="logo-text">FIGURE</span>
+            <span class="logo-dot"></span>
           </div>
           <h1 class="brand-title">AI 对话式<br />手办盲盒定制平台</h1>
           <p class="brand-desc">
@@ -20,21 +20,9 @@
             经人工终审后量产实体盲盒。
           </p>
           <div class="brand-features">
-            <div class="brand-feature">
-              <el-icon :size="20"><ChatDotRound /></el-icon>
-              <span>AI 流式对话设计</span>
-            </div>
-            <div class="brand-feature">
-              <el-icon :size="20"><Picture /></el-icon>
-              <span>DALL-E 3 概念图生成</span>
-            </div>
-            <div class="brand-feature">
-              <el-icon :size="20"><View /></el-icon>
-              <span>Meshy AI 3D 模型</span>
-            </div>
-            <div class="brand-feature">
-              <el-icon :size="20"><Box /></el-icon>
-              <span>全流程状态追踪</span>
+            <div class="brand-feature" v-for="(f, i) in brandFeatures" :key="i">
+              <el-icon :size="20"><component :is="f.icon" /></el-icon>
+              <span>{{ f.text }}</span>
             </div>
           </div>
         </div>
@@ -42,7 +30,7 @@
 
       <!-- 右侧表单区 -->
       <div class="form-side">
-        <div class="form-card glass">
+        <div class="form-card">
           <div class="form-header">
             <h2>{{ activeTab === 'login' ? '欢迎回来' : '创建账号' }}</h2>
             <p>{{ activeTab === 'login' ? '登录开始你的设计之旅' : '注册即可免费体验 AI 手办设计' }}</p>
@@ -78,13 +66,13 @@
                   />
                 </el-form-item>
                 <el-button
-                  type="primary"
                   class="submit-btn"
                   :loading="loading"
                   @click="handleLogin"
                 >
                   登录
                 </el-button>
+                <el-button text class="aux-link" @click="showForgot = true">忘记密码?</el-button>
               </el-form>
             </el-tab-pane>
 
@@ -135,16 +123,27 @@
                   />
                 </el-form-item>
                 <el-button
-                  type="primary"
                   class="submit-btn"
                   :loading="loading"
                   @click="handleRegister"
                 >
                   注册
                 </el-button>
+                <p class="terms-hint">
+                  注册即表示你已阅读并同意
+                  <router-link to="/terms">用户协议与合规说明</router-link>
+                </p>
               </el-form>
             </el-tab-pane>
           </el-tabs>
+
+          <el-dialog v-model="showForgot" title="重置密码" width="400px">
+            <el-input v-model="forgotEmail" placeholder="注册邮箱" size="large" />
+            <template #footer>
+              <el-button @click="showForgot = false">取消</el-button>
+              <el-button type="primary" :loading="forgotLoading" @click="handleForgot">发送重置邮件</el-button>
+            </template>
+          </el-dialog>
 
           <!-- Demo 账号提示 -->
           <div class="demo-accounts">
@@ -175,9 +174,10 @@
 import { ref, reactive } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
-import { register } from '@/api/auth'
+import { register, forgotPassword } from '@/api/auth'
 import { ElMessage } from 'element-plus'
 import { User, Lock, Message, ChatDotRound, Picture, View, Box, CopyDocument } from '@element-plus/icons-vue'
+import AmbientBackground from '@/components/AmbientBackground.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -185,8 +185,18 @@ const userStore = useUserStore()
 
 const activeTab = ref('login')
 const loading = ref(false)
+const showForgot = ref(false)
+const forgotEmail = ref('')
+const forgotLoading = ref(false)
 const loginFormRef = ref()
 const registerFormRef = ref()
+
+const brandFeatures = [
+  { icon: ChatDotRound, text: 'AI 流式对话设计' },
+  { icon: Picture, text: 'DALL-E 3 概念图生成' },
+  { icon: View, text: 'Meshy AI 3D 模型' },
+  { icon: Box, text: '全流程状态追踪' }
+]
 
 const loginForm = reactive({ account: '', password: '' })
 const loginRules = {
@@ -247,6 +257,23 @@ async function handleLogin() {
   })
 }
 
+async function handleForgot() {
+  if (!forgotEmail.value) {
+    ElMessage.warning('请输入邮箱')
+    return
+  }
+  forgotLoading.value = true
+  try {
+    await forgotPassword(forgotEmail.value)
+    ElMessage.success('如果该邮箱已注册,你会收到重置邮件(未配置 SMTP 时请查看后端日志)')
+    showForgot.value = false
+  } catch {
+    /* 拦截器已提示 */
+  } finally {
+    forgotLoading.value = false
+  }
+}
+
 async function handleRegister() {
   await registerFormRef.value.validate(async (valid) => {
     if (!valid) return
@@ -277,47 +304,33 @@ async function handleRegister() {
   justify-content: center;
   position: relative;
   overflow: hidden;
-}
-
-.login-bg {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-}
-
-.bg-gradient {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse at 20% 30%, rgba(102, 126, 234, 0.2) 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 70%, rgba(118, 75, 162, 0.2) 0%, transparent 50%);
-}
-
-.bg-particles {
-  position: absolute;
-  inset: 0;
-  background-image:
-    radial-gradient(2px 2px at 20% 30%, rgba(255,255,255,0.15), transparent),
-    radial-gradient(2px 2px at 60% 70%, rgba(255,255,255,0.1), transparent),
-    radial-gradient(1px 1px at 50% 50%, rgba(255,255,255,0.1), transparent),
-    radial-gradient(1px 1px at 80% 10%, rgba(255,255,255,0.1), transparent);
-  background-size: 200% 200%;
-  animation: float 20s ease-in-out infinite;
+  z-index: 1;
 }
 
 .login-container {
   position: relative;
-  z-index: 1;
   display: flex;
-  width: 900px;
+  width: 920px;
   max-width: 90vw;
-  min-height: 560px;
-  border-radius: 24px;
+  min-height: 580px;
+  border-radius: 28px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(20, 20, 20, 0.6);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55), var(--glass-highlight);
+  animation: fadeInUp 0.8s var(--ease-out);
+}
+
+/* 描边光 */
+.border-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(109, 124, 255, 0.6), rgba(168, 85, 247, 0.3) 50%, rgba(236, 72, 153, 0.4));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 2;
 }
 
 /* 左侧品牌区 */
@@ -328,7 +341,9 @@ async function handleRegister() {
   justify-content: center;
   padding: 48px;
   background:
-    linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+    radial-gradient(ellipse at 30% 20%, rgba(109, 124, 255, 0.18), transparent 60%),
+    radial-gradient(ellipse at 70% 80%, rgba(236, 72, 153, 0.12), transparent 60%),
+    linear-gradient(135deg, rgba(109, 124, 255, 0.06) 0%, rgba(168, 85, 247, 0.06) 100%);
   border-right: 1px solid rgba(255, 255, 255, 0.06);
 }
 
@@ -345,8 +360,23 @@ async function handleRegister() {
   margin-bottom: 32px;
 }
 
-.logo-icon { color: #667eea; font-weight: 900; }
+.logo-icon {
+  background: var(--gradient-brand);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 900;
+  animation: gradientShift 6s ease infinite;
+}
 .logo-text { color: #fff; font-weight: 300; letter-spacing: 2px; }
+.logo-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--brand-3, #ec4899);
+  box-shadow: 0 0 10px rgba(236, 72, 153, 0.8);
+  margin-left: 2px;
+  animation: pulse 2.5s ease-in-out infinite;
+}
 
 .brand-title {
   font-size: 28px;
@@ -358,7 +388,7 @@ async function handleRegister() {
 
 .brand-desc {
   font-size: 14px;
-  color: #999;
+  color: var(--text-3);
   line-height: 1.7;
   margin-bottom: 32px;
 }
@@ -373,17 +403,26 @@ async function handleRegister() {
   display: flex;
   align-items: center;
   gap: 12px;
-  color: #ccc;
+  color: var(--text-2);
   font-size: 14px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  transition: all 0.3s var(--ease-out);
+}
+
+.brand-feature:hover {
+  background: rgba(109, 124, 255, 0.1);
+  transform: translateX(4px);
 }
 
 .brand-feature .el-icon {
-  color: #667eea;
+  color: var(--brand-1);
 }
 
 /* 右侧表单区 */
 .form-side {
-  width: 420px;
+  width: 440px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -407,21 +446,45 @@ async function handleRegister() {
 
 .form-header p {
   font-size: 14px;
-  color: #888;
+  color: var(--text-3);
 }
 
 .login-tabs {
   margin-bottom: 20px;
 }
 
+.aux-link { margin-top: 8px; width: 100%; color: var(--text-3); }
+.terms-hint { margin-top: 12px; font-size: 12px; color: var(--text-4); text-align: center; }
+.terms-hint a { color: var(--brand-1); }
 .submit-btn {
   width: 100%;
-  height: 44px;
+  height: 46px;
   font-size: 15px;
   margin-top: 8px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border: none;
+  background: var(--gradient-brand) !important;
+  border: none !important;
+  color: #fff !important;
+  box-shadow: 0 4px 20px rgba(109, 124, 255, 0.35);
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.3s var(--ease-spring) !important;
 }
+
+.submit-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(109, 124, 255, 0.5) !important;
+}
+
+.submit-btn::after {
+  content: '';
+  position: absolute;
+  top: 0; left: -80%;
+  width: 50%; height: 100%;
+  background: linear-gradient(100deg, transparent 20%, rgba(255,255,255,0.35) 50%, transparent 80%);
+  transform: skewX(-20deg);
+  transition: left 0.7s var(--ease-out);
+}
+.submit-btn:hover::after { left: 130%; }
 
 /* Demo 账号 */
 .demo-accounts {
@@ -432,7 +495,7 @@ async function handleRegister() {
 
 .demo-title {
   font-size: 12px;
-  color: #666;
+  color: var(--text-4);
   margin-bottom: 12px;
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -443,31 +506,32 @@ async function handleRegister() {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: all 0.25s var(--ease-out);
   margin-bottom: 4px;
 }
 
 .demo-row:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(109, 124, 255, 0.08);
+  transform: translateX(2px);
 }
 
 .demo-label {
   font-size: 12px;
-  color: #667eea;
+  color: var(--brand-1);
   min-width: 36px;
 }
 
 .demo-cred {
   font-size: 13px;
-  color: #ccc;
+  color: var(--text-2);
   flex: 1;
   font-family: 'SF Mono', 'Monaco', monospace;
 }
 
 .demo-copy {
-  color: #555;
+  color: var(--text-4);
   font-size: 14px;
 }
 

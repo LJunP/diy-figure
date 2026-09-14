@@ -90,6 +90,39 @@ public class OrderController {
     }
 
     /**
+     * 终审拒绝后重新提交: REVIEW_REJECTED → DRAFT_SUBMIT_PENDING
+     */
+    @PostMapping("/{id}/resubmit")
+    public ApiResponse<Void> resubmitOrder(@PathVariable Long id, HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute(JwtInterceptor.CURRENT_USER_ID);
+        orderService.resubmitOrder(id, userId);
+        return ApiResponse.success();
+    }
+
+    /**
+     * 重新打开已关闭订单: CLOSED → DRAFT_SUBMIT_PENDING
+     */
+    @PostMapping("/{id}/reopen")
+    public ApiResponse<Void> reopenOrder(@PathVariable Long id, HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute(JwtInterceptor.CURRENT_USER_ID);
+        orderService.reopenOrder(id, userId);
+        return ApiResponse.success();
+    }
+
+    /**
+     * 提交终审: DRAFT_SUBMIT_PENDING → REVIEWING
+     *
+     * 返工闭环入口:resubmit(终审拒绝后)和 reopen(拒绝报价后)都只把订单放回草稿态,
+     * 必须再调一次这个接口才会重新进入运营的终审队列。
+     */
+    @PostMapping("/{id}/submit-review")
+    public ApiResponse<Void> submitForReview(@PathVariable Long id, HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute(JwtInterceptor.CURRENT_USER_ID);
+        orderService.submitForReview(id, userId);
+        return ApiResponse.success();
+    }
+
+    /**
      * 执行抽奖
      */
     @PostMapping("/{id}/lottery/draw")
@@ -104,10 +137,10 @@ public class OrderController {
      */
     @PostMapping("/{id}/address")
     public ApiResponse<Void> bindAddress(@PathVariable Long id,
-                                         @RequestBody java.util.Map<String, Long> body,
+                                         @Valid @RequestBody com.diyfigure.order.dto.BindAddressRequest body,
                                          HttpServletRequest request) {
         Long userId = (Long) request.getAttribute(JwtInterceptor.CURRENT_USER_ID);
-        orderService.bindAddress(id, userId, body.get("addressId"));
+        orderService.bindAddress(id, userId, body.getAddressId());
         return ApiResponse.success();
     }
 

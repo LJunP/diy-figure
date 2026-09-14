@@ -105,4 +105,15 @@ public class OrderEntity {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    /**
+     * 乐观锁版本号
+     *
+     * 抽签、支付回调、状态流转都存在并发入口。没有版本锁时,两个并发请求
+     * 可能读到同一份旧状态并各自写回,导致重复抽签、重复补购或状态回退。
+     * 加上 @Version 后,后提交的一方会抛 ObjectOptimisticLockingFailureException。
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 }

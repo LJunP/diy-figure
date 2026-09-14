@@ -1,6 +1,7 @@
 package com.diyfigure.entity;
 
 import com.diyfigure.common.enums.CanvasStatus;
+import com.diyfigure.common.enums.Model3dStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -41,6 +42,13 @@ public class Canvas {
     @Column(name = "series_id", nullable = false)
     private Long seriesId;
 
+    /**
+     * 角色名称,由用户在创建画布时填写
+     * 订单详情、补购列表等展示位统一用它,不再用 "画布 {id}" 硬编码
+     */
+    @Column(nullable = false, length = 100)
+    private String name;
+
     /** 画布状态:DESIGNING / FINALIZED */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -61,6 +69,22 @@ public class Canvas {
      */
     @Column(name = "model_3d_url", length = 500)
     private String model3dUrl;
+
+    /**
+     * 3D 生成任务 ID(Meshy 返回),用于轮询与重试
+     * 定稿不再同步等待,任务由后台调度推进
+     */
+    @Column(name = "model_3d_task_id", length = 100)
+    private String model3dTaskId;
+
+    /**
+     * 3D 生成状态,见 {@link com.diyfigure.common.enums.Model3dStatus}
+     * 前端据此显示"生成中/失败可重试",而不是一直转圈
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "model_3d_status", nullable = false, length = 20)
+    @Builder.Default
+    private Model3dStatus model3dStatus = Model3dStatus.NONE;
 
     /**
      * AI 对话记录(JSON)
@@ -92,4 +116,9 @@ public class Canvas {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    /** 乐观锁:防止定稿与并发对话同时写入导致状态回退 */
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 }

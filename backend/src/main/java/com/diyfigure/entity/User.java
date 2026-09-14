@@ -49,6 +49,19 @@ public class User {
     @Column(nullable = false, length = 20)
     private UserRole role;
 
+    /**
+     * 邮箱是否已验证。存量/测试/管理员默认 true,新注册由 AuthService 写成 false。
+     * 未验证不阻断登录(演示环境没有 SMTP),只在个人中心提示。
+     */
+    @Builder.Default
+    @Column(name = "email_verified", nullable = false)
+    private Boolean emailVerified = true;
+
+    /** 账号是否可用。false 时拒绝登录。 */
+    @Builder.Default
+    @Column(nullable = false)
+    private Boolean enabled = true;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

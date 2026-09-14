@@ -49,14 +49,22 @@ public class OssService {
      * @return 文件的完整访问 URL
      */
     public String uploadImage(MultipartFile file, String directory) {
-        // 校验文件类型
+        validateImageType(file);
+        return uploadFile(file, directory);
+    }
+
+    /**
+     * 校验上传文件是否为允许的图片格式
+     *
+     * 抽成 public:OSS 通道和本地磁盘降级通道必须用同一套校验,
+     * 否则「配了 OSS 会被拦、没配 OSS 却能传」,形成安全缺口。
+     */
+    public void validateImageType(MultipartFile file) {
         String contentType = file.getContentType();
         if (contentType == null || !ALLOWED_IMAGE_TYPES.contains(contentType)) {
             throw new BusinessException(ResultCode.FILE_TYPE_NOT_SUPPORTED,
                     "不支持的图片格式,仅支持 JPEG/PNG/GIF/WebP");
         }
-
-        return uploadFile(file, directory);
     }
 
     /**

@@ -41,7 +41,11 @@ public class ProductionService {
     private final OrderCanvasRepository orderCanvasRepository;
     private final QualityCheckLogRepository qcLogRepository;
     private final CancellationLogRepository cancellationLogRepository;
+    private final PaymentRepository paymentRepository;
     private final OrderStateMachineService stateMachineService;
+
+    /** 已付定金未开工时,扣作服务费的定金比例 */
+    private static final BigDecimal DEPOSIT_PENALTY_RATE = new BigDecimal("0.30");
 
     // ===== 运营端接口 =====
 
@@ -94,7 +98,16 @@ public class ProductionService {
             throw new BusinessException(ResultCode.BAD_REQUEST, "订单不在待质检状态");
         }
 
-        QcResult result = QcResult.valueOf(request.getResult());
+        QcResult result;
+        try {
+            result = QcResult.valueOf(request.getResult());
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "质检结果必须是 PASSED 或 FAILED");
+        }
+        if (result == QcResult.FAILED
+                && (request.getFailReason() == null || request.getFailReason().isBlank())) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "质检不通过时必须填写原因");
+        }
 
         // 记录质检日志
         QualityCheckLog qcLog = QualityCheckLog.builder()
@@ -212,11 +225,15 @@ public class ProductionService {
      * 用户端: 取消订单
      *
      * ★ 违约金三档规则(02 文档 4.4 节):
-     * 1. 未付定金前取消(stage < DEPOSIT_PENDING):无损失
-     * 2. 已付定金未开工取消(production_started_at == null):
-     *    扣除定金 30% 作服务费,退还 70%
-     * 3. 已开工取消(production_started_at != null):
+     * 1. 定金未支付:无损失
+     * 2. 已付定金未开工(production_started_at == null):
+     *    扣除实付定金 30% 作服务费,退还 70%
+     * 3. 已开工(production_started_at != null):
      *    定金不退
+     *
+     * 档位判定依据「真实支付事实」(是否存在 SUCCESS 的定金支付单),
+     * 而不是状态枚举顺序:DEPOSIT_PENDING 的含义就是"待付定金",
+     * 此时用户一分未付,按枚举顺序会被误判成"已付定金"而错扣 30%。
      *
      * @param orderId 订单 ID
      * @param userId 用户 ID
@@ -241,26 +258,21 @@ public class ProductionService {
         BigDecimal penaltyAmount = BigDecimal.ZERO;
         String description;
 
-        // 判断违约金档位
-        if (order.getStatus().ordinal() < OrderStatus.DEPOSIT_PENDING.ordinal()) {
-            // 档位1:未付定金前取消,无损失
+        // 判断违约金档位:以实付定金为准
+        BigDecimal paidDeposit = findPaidDepositAmount(orderId);
+
+        if (paidDeposit.compareTo(BigDecimal.ZERO) <= 0) {
+            // 档位1:定金未支付,无损失
             description = "未付定金前取消,无损失";
         } else if (order.getProductionStartedAt() == null) {
-            // 档位2:已付定金未开工,扣除定金30%,退还70%
-            if (order.getDepositAmount() != null) {
-                penaltyAmount = order.getDepositAmount()
-                        .multiply(new BigDecimal("0.30"))
-                        .setScale(2, RoundingMode.HALF_UP);
-                refundAmount = order.getDepositAmount()
-                        .subtract(penaltyAmount)
-                        .setScale(2, RoundingMode.HALF_UP);
-            }
+            // 档位2:已付定金未开工,扣除实付定金30%,退还70%
+            penaltyAmount = paidDeposit.multiply(DEPOSIT_PENALTY_RATE).setScale(2, RoundingMode.HALF_UP);
+            refundAmount = paidDeposit.subtract(penaltyAmount).setScale(2, RoundingMode.HALF_UP);
             description = "已付定金未开工取消,扣除定金30%作服务费,退还70%";
         } else {
             // 档位3:已开工,定金不退
-            if (order.getDepositAmount() != null) {
-                penaltyAmount = order.getDepositAmount();
-            }
+            penaltyAmount = paidDeposit;
+            refundAmount = BigDecimal.ZERO;
             description = "已开工取消,定金不退";
         }
 
@@ -274,7 +286,18 @@ public class ProductionService {
                 .build();
         cancellationLogRepository.save(cancelLog);
 
-        // 状态转移: → CANCELLED
+        final BigDecimal recordedRefund = refundAmount;
+        if (recordedRefund.compareTo(BigDecimal.ZERO) > 0) {
+            paymentRepository.findByOrderIdAndType(orderId, PaymentType.DEPOSIT).stream()
+                    .filter(p -> p.getStatus() == PaymentStatus.SUCCESS && p.getRefundedAt() == null)
+                    .findFirst()
+                    .ifPresent(payment -> {
+                        payment.setRefundAmount(recordedRefund);
+                        payment.setRefundedAt(LocalDateTime.now());
+                        paymentRepository.save(payment);
+                    });
+        }
+
         stateMachineService.transition(order, OrderStatus.CANCELLED,
                 OperatorType.USER, userId, description);
 
@@ -288,6 +311,19 @@ public class ProductionService {
                 .depositPenaltyAmount(penaltyAmount)
                 .description(description)
                 .build();
+    }
+
+    /**
+     * 查询该订单已成功支付的定金金额(未支付返回 0)
+     *
+     * 取消违约金必须依据真实支付事实计算,不能依赖订单状态推断。
+     */
+    private BigDecimal findPaidDepositAmount(Long orderId) {
+        return paymentRepository.findByOrderIdAndType(orderId, PaymentType.DEPOSIT).stream()
+                .filter(p -> p.getStatus() == PaymentStatus.SUCCESS)
+                .map(Payment::getAmount)
+                .findFirst()
+                .orElse(BigDecimal.ZERO);
     }
 
     /**

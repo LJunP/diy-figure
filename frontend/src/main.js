@@ -7,6 +7,7 @@ import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 
 import App from './App.vue'
 import router from './router'
+import revealDirective from './directives/reveal'
 import './assets/main.css'
 
 const app = createApp(App)
@@ -15,6 +16,9 @@ const app = createApp(App)
 for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
   app.component(key, component)
 }
+
+// 注册全局滚动入场指令 v-reveal
+app.directive('reveal', revealDirective)
 
 app.use(createPinia())
 app.use(router)

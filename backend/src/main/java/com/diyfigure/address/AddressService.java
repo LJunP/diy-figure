@@ -24,6 +24,7 @@ import java.util.List;
 public class AddressService {
 
     private final AddressRepository addressRepository;
+    private final com.diyfigure.repository.OrderRepository orderRepository;
 
     /**
      * 查询用户的所有收货地址
@@ -50,11 +51,17 @@ public class AddressService {
      */
     @Transactional
     public Address create(Long userId, AddressRequest request) {
+        boolean first = addressRepository.countByUserId(userId) == 0;
+        boolean makeDefault = first || Boolean.TRUE.equals(request.getIsDefault());
+        if (makeDefault) {
+            clearDefault(userId);
+        }
         Address address = Address.builder()
                 .userId(userId)
                 .receiverName(request.getReceiverName())
                 .phone(request.getPhone())
                 .detail(request.getDetail())
+                .isDefault(makeDefault)
                 .build();
         address = addressRepository.save(address);
         log.info("新增收货地址: id={}, userId={}", address.getId(), userId);
@@ -70,6 +77,10 @@ public class AddressService {
         address.setReceiverName(request.getReceiverName());
         address.setPhone(request.getPhone());
         address.setDetail(request.getDetail());
+        if (Boolean.TRUE.equals(request.getIsDefault())) {
+            clearDefault(userId);
+            address.setIsDefault(true);
+        }
         return addressRepository.save(address);
     }
 
@@ -79,7 +90,25 @@ public class AddressService {
     @Transactional
     public void delete(Long id, Long userId) {
         Address address = getByIdAndUserId(id, userId);
+        if (orderRepository.existsByAddressId(id)) {
+            throw new BusinessException(ResultCode.CONFLICT, "该地址已被订单使用,不能删除");
+        }
+        boolean wasDefault = Boolean.TRUE.equals(address.getIsDefault());
         addressRepository.delete(address);
+        if (wasDefault) {
+            addressRepository.findByUserIdOrderByCreatedAtDesc(userId).stream().findFirst()
+                    .ifPresent(next -> {
+                        next.setIsDefault(true);
+                        addressRepository.save(next);
+                    });
+        }
         log.info("删除收货地址: id={}, userId={}", id, userId);
+    }
+
+    private void clearDefault(Long userId) {
+        for (Address existing : addressRepository.findByUserIdAndIsDefaultTrue(userId)) {
+            existing.setIsDefault(false);
+            addressRepository.save(existing);
+        }
     }
 }

@@ -29,6 +29,8 @@ public enum ResultCode {
     USER_NOT_FOUND(4002, "用户不存在"),
     PASSWORD_INCORRECT(4003, "密码错误"),
     ACCOUNT_DISABLED(4004, "账号已禁用"),
+    EMAIL_TOKEN_INVALID(4005, "验证链接无效或已过期"),
+    PASSWORD_RESET_TOKEN_INVALID(4006, "重置链接无效或已过期"),
 
     SERIES_NOT_FOUND(4101, "系列不存在"),
     CANVAS_NOT_FOUND(4102, "画布不存在"),

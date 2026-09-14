@@ -97,7 +97,7 @@ public class OpenAiService {
                              List<String> imageUrls,
                              SseEmitter sseEmitter) {
         // Demo 模式:API Key 未配置时返回模拟回复
-        if (apiKey.contains("your-openai-api-key")) {
+        if (!com.diyfigure.common.util.ExternalKeys.isConfigured(apiKey)) {
             log.warn("OpenAI API Key 未配置,返回 Demo 模拟回复");
             String mockReply = generateMockReply(userMessage, imageUrls);
             // 逐 token 推送,模拟流式效果
@@ -239,7 +239,7 @@ public class OpenAiService {
                        String userMessage,
                        List<String> imageUrls) {
         // Demo 模式:API Key 未配置时返回模拟回复
-        if (apiKey.contains("your-openai-api-key")) {
+        if (!com.diyfigure.common.util.ExternalKeys.isConfigured(apiKey)) {
             log.warn("OpenAI API Key 未配置,返回 Demo 模拟回复");
             return generateMockReply(userMessage, imageUrls);
         }
@@ -318,7 +318,7 @@ public class OpenAiService {
     public String generateImage(String prompt) {
         try {
             // 如果 API Key 是占位值,返回占位图
-            if (apiKey.contains("your-openai-api-key")) {
+            if (!com.diyfigure.common.util.ExternalKeys.isConfigured(apiKey)) {
                 log.warn("OpenAI API Key 未配置,返回占位图 URL");
                 return "https://placehold.co/512x512/3D2B5F/FFD700/png?text=AI+Concept+Art";
             }

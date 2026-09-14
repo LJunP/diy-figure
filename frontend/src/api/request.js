@@ -14,7 +14,27 @@ const request = axios.create({
   }
 })
 
-// ===== 请求拦截器:自动附带 JWT token =====
+export function handleUnauthorized() {
+  localStorage.removeItem('token')
+  localStorage.removeItem('userInfo')
+  import('@/stores/user').then(({ useUserStore }) => {
+    try {
+      useUserStore().logout()
+    } catch (_) {
+      /* Pinia 尚未就绪时忽略 */
+    }
+  })
+  const current = router.currentRoute.value
+  if (current?.name === 'Login') {
+    return
+  }
+  const redirect = current?.fullPath
+  router.push({
+    name: 'Login',
+    query: redirect && redirect !== '/login' ? { redirect } : {}
+  })
+}
+
 request.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token')
@@ -23,45 +43,33 @@ request.interceptors.request.use(
     }
     return config
   },
-  (error) => {
-    return Promise.reject(error)
-  }
+  (error) => Promise.reject(error)
 )
 
-// ===== 响应拦截器:统一错误处理 =====
 request.interceptors.response.use(
   (response) => {
     const res = response.data
-
-    // 后端统一返回 { code, message, data, timestamp }
     if (res.code === 200) {
       return res
     }
-
-    // 业务错误:显示错误提示
     ElMessage.error(res.message || '操作失败')
     return Promise.reject(new Error(res.message || 'Error'))
   },
   (error) => {
     if (error.response) {
       const { status, data } = error.response
-
       if (status === 401) {
-        // token 过期或未登录,清除本地存储并跳转登录页
-        localStorage.removeItem('token')
-        localStorage.removeItem('userInfo')
         ElMessage.warning('登录已过期,请重新登录')
-        router.push('/login')
+        handleUnauthorized()
       } else {
         const message = data?.message || `请求失败(${status})`
         ElMessage.error(message)
       }
-    } else if (error.message.includes('timeout')) {
+    } else if (error.message?.includes('timeout')) {
       ElMessage.error('请求超时,请稍后重试')
     } else {
       ElMessage.error('网络异常,请检查网络连接')
     }
-
     return Promise.reject(error)
   }
 )

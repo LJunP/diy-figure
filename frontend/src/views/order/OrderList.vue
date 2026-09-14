@@ -1,7 +1,7 @@
 <template>
   <div class="order-list-page">
     <!-- 页头 -->
-    <div class="page-header">
+    <div class="page-header" v-reveal>
       <div>
         <h1 class="page-title">我的订单</h1>
         <p class="page-desc">查看你的所有定制订单</p>
@@ -14,13 +14,21 @@
 
     <!-- 订单卡片 -->
     <div v-loading="loading" class="order-list">
-      <div v-if="orders.length === 0 && !loading" class="empty-state glass">
-        <el-icon :size="48" color="#333"><Box /></el-icon>
+      <div v-if="orders.length === 0 && !loading" class="empty-state glass-card" v-reveal>
+        <div class="empty-orb">
+          <el-icon :size="48"><Box /></el-icon>
+        </div>
         <p>还没有订单</p>
-        <el-button type="primary" round @click="$router.push('/series')">去创建订单</el-button>
+        <el-button round class="btn-liquid" @click="$router.push('/series')">去创建订单</el-button>
       </div>
 
-      <div v-for="order in orders" :key="order.id" class="order-card glass" @click="viewDetail(order.id)">
+      <div
+        v-for="(order, i) in orders"
+        :key="order.id"
+        class="order-card glass-card"
+        v-reveal="{ index: i }"
+        @click="viewDetail(order.id)"
+      >
         <div class="order-header">
           <span class="order-id">#{{ order.id }}</span>
           <el-tag :type="getStatusType(order.status)" effect="dark" size="small">
@@ -134,19 +142,39 @@ onMounted(loadOrders)
   margin-bottom: 24px;
 }
 
-.page-title { font-size: 28px; font-weight: 700; color: #fff; }
-.page-desc { font-size: 14px; color: #666; margin-top: 4px; }
+.page-title {
+  font-size: 30px;
+  font-weight: 700;
+  background: var(--gradient-brand);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradientShift 6s ease infinite;
+}
+
+.page-desc { font-size: 14px; color: var(--text-3); margin-top: 4px; }
 
 .empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
   padding: 60px 24px;
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   gap: 16px;
 }
 
-.empty-state p { color: #666; }
+.empty-orb {
+  width: 80px; height: 80px;
+  border-radius: 50%;
+  background: rgba(109, 124, 255, 0.1);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--brand-1);
+  box-shadow: 0 0 32px rgba(109, 124, 255, 0.12);
+  animation: float 4s ease-in-out infinite;
+}
+
+.empty-state p { color: var(--text-3); }
 
 .order-list {
   display: flex;
@@ -158,13 +186,6 @@ onMounted(loadOrders)
   padding: 24px;
   border-radius: 14px;
   cursor: pointer;
-  transition: all 0.3s;
-}
-
-.order-card:hover {
-  background: rgba(255, 255, 255, 0.06);
-  transform: translateY(-2px);
-  border-color: rgba(102, 126, 234, 0.3);
 }
 
 .order-header {
@@ -192,19 +213,24 @@ onMounted(loadOrders)
   gap: 4px;
 }
 
-.info-label { font-size: 12px; color: #666; }
-.info-value { font-size: 14px; color: #ccc; }
-.info-value.price { color: #f5576c; font-weight: 600; font-size: 16px; }
+.info-label { font-size: 12px; color: var(--text-4); }
+.info-value { font-size: 14px; color: var(--text-2); }
+.info-value.price { color: var(--brand-3); font-weight: 600; font-size: 16px; }
 
 .order-footer {
   margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--line-soft);
   display: flex;
   justify-content: flex-end;
 }
 
-.view-detail { font-size: 14px; color: #667eea; }
+.view-detail {
+  font-size: 14px;
+  color: var(--brand-1);
+  transition: transform 0.25s var(--ease-out);
+}
+.order-card:hover .view-detail { transform: translateX(4px); }
 
 @media (max-width: 768px) {
   .order-body { grid-template-columns: repeat(2, 1fr); }

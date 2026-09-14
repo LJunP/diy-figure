@@ -30,6 +30,12 @@ public class OrderStateMachineService {
     private final OrderStatusLogRepository orderStatusLogRepository;
 
     /**
+     * 通知是旁路能力:用 ObjectProvider 注入,且调用失败只记日志,
+     * 保证"通知出问题"永远不会阻断订单状态流转。
+     */
+    private final org.springframework.beans.factory.ObjectProvider<com.diyfigure.notification.NotificationService> notificationServiceProvider;
+
+    /**
      * 状态转移
      *
      * @param order 订单对象
@@ -61,6 +67,15 @@ public class OrderStateMachineService {
                 .reason(reason)
                 .build();
         orderStatusLogRepository.save(statusLog);
+
+        // 4. 产生通知(站内消息 + 三个关键节点的邮件)。失败不影响状态流转
+        try {
+            notificationServiceProvider.ifAvailable(svc ->
+                    svc.notifyOrderStatusChanged(order.getId(), order.getUserId(), toStatus));
+        } catch (Exception e) {
+            log.error("订单通知发送失败(已忽略): orderId={}, toStatus={}, error={}",
+                    order.getId(), toStatus, e.getMessage());
+        }
 
         log.info("订单状态转移: orderId={}, {} → {}, operator={}, reason={}",
                 order.getId(), fromStatus, toStatus, operatorType, reason);

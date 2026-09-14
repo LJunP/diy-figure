@@ -16,7 +16,8 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        // 后端默认 8080；端口被占用时可通过 VITE_BACKEND_TARGET 覆盖
+        target: process.env.VITE_BACKEND_TARGET || 'http://localhost:8080',
         changeOrigin: true
       }
     }

@@ -24,5 +24,6 @@ public class RefillableCanvasResponse {
     private String lotteryResult;       // NOT_SELECTED
     private LocalDate refillAvailableUntil;
     private Boolean expired;            // 补购窗口是否已过期
+    private Boolean alreadyRefilled;
     private BigDecimal refillPrice;     // 自动计算的补购价格
 }

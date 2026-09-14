@@ -8,8 +8,7 @@ import lombok.Data;
 /**
  * 注册请求 DTO
  *
- * V1 采用邮箱+密码注册(不实现验证码,标注 TODO 待后续接入邮件服务)
- * 02 文档要求"邮箱验证码或手机验证码二选一即可",当前先实现基础注册流程
+ * 注册后签发邮箱验证令牌(邮件无 SMTP 时降级为日志)。未验证不阻断登录。
  */
 @Data
 public class RegisterRequest {

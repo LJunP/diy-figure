@@ -4,23 +4,35 @@ import com.diyfigure.auth.dto.AuthResponse;
 import com.diyfigure.auth.dto.LoginRequest;
 import com.diyfigure.auth.dto.RegisterRequest;
 import com.diyfigure.auth.dto.UpdatePasswordRequest;
+import com.diyfigure.common.enums.AuthTokenPurpose;
 import com.diyfigure.common.enums.UserRole;
 import com.diyfigure.common.exception.BusinessException;
 import com.diyfigure.common.response.ResultCode;
+import com.diyfigure.entity.AuthToken;
 import com.diyfigure.entity.User;
+import com.diyfigure.notification.EmailService;
+import com.diyfigure.repository.AuthTokenRepository;
 import com.diyfigure.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
+import java.time.LocalDateTime;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.UUID;
+
 /**
- * 认证服务
- * 负责用户注册、登录、信息查询、密码修改
+ * 认证服务:注册、登录、邮箱验证、忘记密码。
  *
- * 密码使用 BCrypt 加密存储,不存明文
- * 登录成功后签发 JWT token
+ * 未配置 SMTP 时邮件降级为日志,token 仍写入 auth_token,测试可从库中读取。
+ * 未验证邮箱不阻断登录,避免演示环境没有 SMTP 时整个产品不能用。
  */
 @Slf4j
 @Service
@@ -28,102 +40,180 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthService {
 
     private final UserRepository userRepository;
+    private final AuthTokenRepository authTokenRepository;
     private final JwtUtil jwtUtil;
-    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private final EmailService emailService;
 
-    /**
-     * 用户注册
-     *
-     * V1 采用邮箱+密码注册,暂不实现验证码
-     * TODO: 后续接入邮件服务后,增加邮箱验证码验证流程
-     *
-     * @param request 注册请求(username, email, password)
-     * @return 登录响应(含 token,注册成功后自动登录)
-     */
+    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private final SecureRandom secureRandom = new SecureRandom();
+
+    @Value("${diy.app.public-url:http://localhost:5173}")
+    private String appPublicUrl;
+
     @Transactional
     public AuthResponse register(RegisterRequest request) {
-        // 校验用户名唯一
         if (userRepository.existsByUsername(request.getUsername())) {
             throw new BusinessException(ResultCode.USER_ALREADY_EXISTS, "用户名已被注册");
         }
-
-        // 校验邮箱唯一
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new BusinessException(ResultCode.USER_ALREADY_EXISTS, "邮箱已被注册");
         }
 
-        // 创建用户,密码 BCrypt 加密
         User user = User.builder()
                 .username(request.getUsername())
                 .email(request.getEmail())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .role(UserRole.USER)
+                .emailVerified(false)
+                .enabled(true)
                 .build();
-
         user = userRepository.save(user);
+        issueEmailVerification(user);
         log.info("用户注册成功: id={}, username={}", user.getId(), user.getUsername());
-
-        // 注册成功后自动登录,签发 token
         return buildAuthResponse(user);
     }
 
-    /**
-     * 用户登录
-     * 支持用户名或邮箱登录
-     *
-     * @param request 登录请求(account, password)
-     * @return 登录响应(含 token)
-     */
     public AuthResponse login(LoginRequest request) {
-        // 根据 account 查找用户(先按用户名查,再按邮箱查)
         User user = userRepository.findByUsername(request.getAccount())
                 .or(() -> userRepository.findByEmail(request.getAccount()))
                 .orElseThrow(() -> new BusinessException(ResultCode.USER_NOT_FOUND, "账号不存在"));
 
-        // 校验密码
+        if (Boolean.FALSE.equals(user.getEnabled())) {
+            throw new BusinessException(ResultCode.ACCOUNT_DISABLED);
+        }
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
             throw new BusinessException(ResultCode.PASSWORD_INCORRECT);
         }
-
         log.info("用户登录成功: id={}, username={}", user.getId(), user.getUsername());
         return buildAuthResponse(user);
     }
 
-    /**
-     * 获取当前登录用户信息
-     *
-     * @param userId 用户 ID
-     * @return 用户信息
-     */
     public AuthResponse.UserInfo getUserInfo(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ResultCode.USER_NOT_FOUND));
         return toUserInfo(user);
     }
 
-    /**
-     * 修改密码
-     *
-     * @param userId  用户 ID
-     * @param request 修改密码请求(原密码, 新密码)
-     */
     @Transactional
     public void updatePassword(Long userId, UpdatePasswordRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ResultCode.USER_NOT_FOUND));
-
-        // 校验原密码
         if (!passwordEncoder.matches(request.getOldPassword(), user.getPasswordHash())) {
             throw new BusinessException(ResultCode.PASSWORD_INCORRECT, "原密码不正确");
         }
-
-        // 更新密码
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
         log.info("用户修改密码成功: id={}", userId);
     }
 
-    // ===== 私有方法 =====
+    @Transactional
+    public void verifyEmail(String rawToken) {
+        AuthToken token = requireValidToken(rawToken, AuthTokenPurpose.EMAIL_VERIFY,
+                ResultCode.EMAIL_TOKEN_INVALID);
+        User user = userRepository.findById(token.getUserId())
+                .orElseThrow(() -> new BusinessException(ResultCode.USER_NOT_FOUND));
+        user.setEmailVerified(true);
+        userRepository.save(user);
+        token.setConsumedAt(LocalDateTime.now());
+        authTokenRepository.save(token);
+        log.info("邮箱已验证: userId={}", user.getId());
+    }
+
+    @Transactional
+    public void resendVerification(String email) {
+        userRepository.findByEmail(email).ifPresent(user -> {
+            if (Boolean.TRUE.equals(user.getEmailVerified())) {
+                return;
+            }
+            issueEmailVerification(user);
+        });
+    }
+
+    /**
+     * 无论邮箱是否存在都返回成功,避免被用来枚举账号。
+     */
+    @Transactional
+    public void forgotPassword(String email) {
+        userRepository.findByEmail(email).ifPresent(this::issuePasswordReset);
+    }
+
+    @Transactional
+    public void resetPassword(String rawToken, String newPassword) {
+        AuthToken token = requireValidToken(rawToken, AuthTokenPurpose.PASSWORD_RESET,
+                ResultCode.PASSWORD_RESET_TOKEN_INVALID);
+        User user = userRepository.findById(token.getUserId())
+                .orElseThrow(() -> new BusinessException(ResultCode.USER_NOT_FOUND));
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+        token.setConsumedAt(LocalDateTime.now());
+        authTokenRepository.save(token);
+        log.info("用户通过重置链接修改密码: id={}", user.getId());
+    }
+
+    private void issueEmailVerification(User user) {
+        String raw = persistToken(user.getId(), AuthTokenPurpose.EMAIL_VERIFY, 48);
+        String link = trimSlash(appPublicUrl) + "/verify-email?token=" + raw;
+        emailService.sendAfterCommit(user.getEmail(), "验证你的 DIY Figure 邮箱",
+                "请在 48 小时内打开以下链接完成邮箱验证:\n" + link + "\n\n如果不是你本人操作,请忽略本邮件。");
+        log.info("已签发邮箱验证令牌: userId={}", user.getId());
+    }
+
+    private void issuePasswordReset(User user) {
+        String raw = persistToken(user.getId(), AuthTokenPurpose.PASSWORD_RESET, 1);
+        String link = trimSlash(appPublicUrl) + "/reset-password?token=" + raw;
+        emailService.sendAfterCommit(user.getEmail(), "重置 DIY Figure 密码",
+                "请在 1 小时内打开以下链接重置密码:\n" + link + "\n\n如果不是你本人操作,请忽略本邮件。");
+        log.info("已签发密码重置令牌: userId={}", user.getId());
+    }
+
+    private String persistToken(Long userId, AuthTokenPurpose purpose, int hoursValid) {
+        List<AuthToken> open = authTokenRepository.findByUserIdAndPurposeAndConsumedAtIsNull(userId, purpose);
+        LocalDateTime now = LocalDateTime.now();
+        for (AuthToken existing : open) {
+            existing.setConsumedAt(now);
+        }
+        authTokenRepository.saveAll(open);
+
+        byte[] extra = new byte[16];
+        secureRandom.nextBytes(extra);
+        String raw = UUID.randomUUID().toString().replace("-", "") + HexFormat.of().formatHex(extra);
+        AuthToken token = AuthToken.builder()
+                .userId(userId)
+                .purpose(purpose)
+                .tokenHash(sha256(raw))
+                .expiresAt(now.plusHours(hoursValid))
+                .build();
+        authTokenRepository.save(token);
+        return raw;
+    }
+
+    private AuthToken requireValidToken(String rawToken, AuthTokenPurpose purpose, ResultCode invalidCode) {
+        if (rawToken == null || rawToken.isBlank()) {
+            throw new BusinessException(invalidCode);
+        }
+        AuthToken token = authTokenRepository.findByTokenHashAndPurpose(sha256(rawToken.trim()), purpose)
+                .orElseThrow(() -> new BusinessException(invalidCode));
+        if (token.getConsumedAt() != null || token.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new BusinessException(invalidCode);
+        }
+        return token;
+    }
+
+    static String sha256(String raw) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(raw.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception e) {
+            throw new IllegalStateException("SHA-256 不可用", e);
+        }
+    }
+
+    private static String trimSlash(String url) {
+        if (url == null || url.isBlank()) {
+            return "http://localhost:5173";
+        }
+        return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
+    }
 
     private AuthResponse buildAuthResponse(User user) {
         String token = jwtUtil.generateToken(user.getId(), user.getRole().name());
@@ -140,6 +230,7 @@ public class AuthService {
                 .email(user.getEmail())
                 .phone(user.getPhone())
                 .role(user.getRole().name())
+                .emailVerified(Boolean.TRUE.equals(user.getEmailVerified()))
                 .build();
     }
 }

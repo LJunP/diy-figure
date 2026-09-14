@@ -21,9 +21,10 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     List<Payment> findByOrderId(Long orderId);
 
     /**
-     * 查询订单某类型的支付记录(定金/尾款)
+     * 查询订单某类型的全部支付记录(定金/尾款)。
+     * 不要用 Optional 单条:成功后再建一单会让单条查询抛 IncorrectResultSize。
      */
-    Optional<Payment> findByOrderIdAndType(Long orderId, PaymentType type);
+    List<Payment> findByOrderIdAndType(Long orderId, PaymentType type);
 
     /**
      * 查询某状态的支付记录

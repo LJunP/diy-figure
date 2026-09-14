@@ -62,4 +62,9 @@ public class Series {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    /** 乐观锁:防止并发创建画布/提交报价导致的设计状态错乱 */
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 }

@@ -51,7 +51,7 @@ public class MeshyAiService {
      */
     public String createTextTo3dTask(String imageUrl) {
         try {
-            if (apiKey.contains("your-meshy-api-key")) {
+            if (!com.diyfigure.common.util.ExternalKeys.isConfigured(apiKey)) {
                 log.warn("Meshy AI API Key 未配置,返回占位任务 ID");
                 return "placeholder-task-id";
             }

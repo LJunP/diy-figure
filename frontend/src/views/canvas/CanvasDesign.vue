@@ -1,10 +1,14 @@
 <template>
   <div class="canvas-design" v-loading="loading">
     <!-- 顶部工具栏 -->
-    <div class="toolbar">
+    <div class="toolbar glass">
       <div class="toolbar-left">
-        <el-button text :icon="ArrowLeft" @click="$router.back()">返回系列</el-button>
+        <el-button text @click="$router.back()">
+          <el-icon><ArrowLeft /></el-icon>
+          返回系列
+        </el-button>
         <el-divider direction="vertical" />
+        <span class="canvas-name">{{ canvas.name || `画布 #${canvas.id || ''}` }}</span>
         <span class="canvas-status">
           <el-tag size="small" :type="canvas.status === 'FINALIZED' ? 'success' : 'info'">
             {{ canvas.status === 'FINALIZED' ? '已定稿' : '设计中' }}
@@ -35,8 +39,9 @@
     <!-- 主体:左右分栏 -->
     <div class="main-content">
       <!-- 左侧:AI 对话窗口 -->
-      <div class="chat-panel">
+      <div class="chat-panel glass">
         <div class="chat-header">
+          <span class="chat-header-dot"></span>
           <el-icon><ChatDotRound /></el-icon>
           <span>AI 设计助手</span>
         </div>
@@ -46,7 +51,7 @@
           <!-- 空状态欢迎消息 -->
           <div v-if="chatMessages.length === 0 && !aiTyping" class="chat-welcome">
             <div class="welcome-icon">
-              <el-icon :size="40" color="#667eea"><MagicStick /></el-icon>
+              <el-icon :size="40" color="#6d7cff"><MagicStick /></el-icon>
             </div>
             <h3>AI 设计助手</h3>
             <p>描述你想要的原创角色,我会帮你设计外观、色彩方案和背景故事。</p>
@@ -153,7 +158,7 @@
       </div>
 
       <!-- 右侧:展示区 -->
-      <div class="preview-panel">
+      <div class="preview-panel glass">
         <div class="preview-header">
           <el-icon><Picture /></el-icon>
           <span>设计展示</span>
@@ -178,17 +183,23 @@
 
           <!-- 3D 模型 -->
           <el-tab-pane label="3D 模型" name="3d">
-            <div v-if="canvas.model3dUrl" class="model-viewer">
-              <div class="model-placeholder">
-                <el-icon :size="48"><Box /></el-icon>
-                <p>3D 参考模型已生成</p>
-                <el-button type="primary" tag="a" :href="canvas.model3dUrl" target="_blank">
-                  下载 .glb 文件
-                </el-button>
-                <p class="model-hint">供厂家原型师精修参考,非直接可打印文件</p>
-              </div>
+            <!-- 生成中:显示进度并自动轮询,不再让请求卡在定稿接口上 -->
+            <div v-if="isModel3dRunning" class="model3d-state">
+              <el-icon class="spin" :size="36"><Loading /></el-icon>
+              <p class="state-title">3D 模型生成中…</p>
+              <p class="state-hint">已提交到生成服务,完成后会自动显示。可以切换到其他标签继续设计。</p>
             </div>
-            <el-empty v-else description="定稿后自动生成 3D 参考模型" />
+
+            <div v-else-if="canvas.model3dStatus === 'FAILED'" class="model3d-state">
+              <el-icon :size="36" class="state-error"><WarningFilled /></el-icon>
+              <p class="state-title">3D 模型生成失败</p>
+              <p class="state-hint">可以重新生成,不会影响已定稿的设计。</p>
+              <el-button type="primary" round :loading="retrying" @click="handleRetryModel3d">
+                重新生成
+              </el-button>
+            </div>
+
+            <Model3DViewer v-else :src="canvas.model3dUrl" :height="440" />
           </el-tab-pane>
         </el-tabs>
       </div>
@@ -197,18 +208,49 @@
 </template>
 
 <script setup>
-import { ref, nextTick, onMounted } from 'vue'
+import { ref, nextTick, onMounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { getCanvasDetail, finalizeCanvas, reopenCanvas, chatWithAI, uploadReferenceImage } from '@/api/canvas'
+import { getCanvasDetail, finalizeCanvas, reopenCanvas, chatWithAI, uploadReferenceImage, retryModel3d } from '@/api/canvas'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   ArrowLeft, Check, ChatDotRound, User, MagicStick, Picture,
-  Promotion, Close, Lock, Box
+  Promotion, Close, Lock, Box, Loading, WarningFilled
 } from '@element-plus/icons-vue'
+import Model3DViewer from '@/components/Model3DViewer.vue'
+import { onBeforeUnmount } from 'vue'
 
 const route = useRoute()
 const loading = ref(true)
 const canvas = ref({})
+const retrying = ref(false)
+
+// 3D 生成是否已提交但尚未完成
+const isModel3dRunning = computed(
+  () => canvas.value.model3dStatus === 'PENDING' || canvas.value.model3dStatus === 'PROCESSING'
+)
+
+// 生成中时轮询后端状态,生成完自动切换为预览
+let model3dTimer = null
+function syncModel3dPolling() {
+  if (isModel3dRunning.value && !model3dTimer) {
+    model3dTimer = setInterval(async () => {
+      try {
+        const res = await getCanvasDetail(route.params.id)
+        canvas.value = res.data
+      } catch (e) { /* 忽略单次轮询失败 */ }
+      if (!isModel3dRunning.value) stopModel3dPolling()
+    }, 5000)
+  } else if (!isModel3dRunning.value) {
+    stopModel3dPolling()
+  }
+}
+function stopModel3dPolling() {
+  if (model3dTimer) {
+    clearInterval(model3dTimer)
+    model3dTimer = null
+  }
+}
+watch(() => canvas.value.model3dStatus, syncModel3dPolling)
 const chatMessages = ref([])
 const inputText = ref('')
 const uploadedImages = ref([])
@@ -252,7 +294,14 @@ async function handleUpload(file) {
 }
 
 // 发送消息
+let chatAbort = null
+onBeforeUnmount(() => {
+  chatAbort?.abort()
+  stopModel3dPolling()
+})
+
 async function handleSend() {
+  if (sending.value) return
   if (!inputText.value.trim() && uploadedImages.value.length === 0) {
     ElMessage.warning('请输入消息或上传参考图')
     return
@@ -282,6 +331,8 @@ async function handleSend() {
 
   // 调用 AI 对话
   let fullResponse = ''
+  chatAbort?.abort()
+  chatAbort = new AbortController()
   await chatWithAI(route.params.id, {
     message,
     imageUrls: imageUrls.length ? imageUrls : undefined,
@@ -321,9 +372,9 @@ async function handleSend() {
     onError: (err) => {
       aiTyping.value = false
       sending.value = false
-      ElMessage.error('AI 对话失败,请稍后重试')
+      ElMessage.error(err?.message || 'AI 对话失败,请稍后重试')
     }
-  })
+  }, { signal: chatAbort.signal })
 }
 
 // 定稿
@@ -339,10 +390,24 @@ async function handleFinalize() {
     const res = await finalizeCanvas(route.params.id)
     canvas.value = { ...canvas.value, ...res.data, status: 'FINALIZED' }
     ElMessage.success('画布已定稿,3D 模型生成中...')
-    // 重新加载获取最新 3D 模型 URL
-    setTimeout(() => loadCanvas(), 3000)
+    // 生成已改为异步,立即刷新一次拿到真实状态,之后由轮询跟进
+    await loadCanvas()
   } finally {
     finalizing.value = false
+  }
+}
+
+// 重新生成 3D 模型(失败后重试)
+async function handleRetryModel3d() {
+  retrying.value = true
+  try {
+    const res = await retryModel3d(route.params.id)
+    canvas.value = { ...canvas.value, ...res.data }
+    ElMessage.success('已重新提交生成')
+  } catch (e) {
+    ElMessage.error(e.response?.data?.message || '重试失败')
+  } finally {
+    retrying.value = false
   }
 }
 
@@ -374,61 +439,217 @@ onMounted(loadCanvas)
 </script>
 
 <style scoped>
-.canvas-design { display: flex; flex-direction: column; height: calc(100vh - 64px); padding: 16px; max-width: 1400px; margin: 0 auto; }
+.canvas-design {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 66px);
+  padding: 16px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
 
-.toolbar { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; margin-bottom: 12px; }
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  border-radius: 14px;
+  margin-bottom: 12px;
+  border: 1px solid var(--line);
+}
 .toolbar-left { display: flex; align-items: center; gap: 8px; }
+.canvas-name { color: var(--text-1); font-weight: 600; margin-right: 8px; }
 .canvas-status { display: flex; gap: 4px; }
 
 .main-content { flex: 1; display: flex; gap: 12px; overflow: hidden; }
 
 /* 左侧对话 */
-.chat-panel { width: 45%; display: flex; flex-direction: column; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; overflow: hidden; }
-.chat-header { padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.06); display: flex; align-items: center; gap: 8px; font-weight: 600; color: #fff; }
+.chat-panel {
+  width: 45%;
+  display: flex;
+  flex-direction: column;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+.chat-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.chat-header-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--brand-green);
+  box-shadow: 0 0 8px rgba(52, 211, 153, 0.8);
+  animation: pulse 2s ease-in-out infinite;
+}
+
 .chat-messages { flex: 1; overflow-y: auto; padding: 16px; }
 
 /* 空状态欢迎 */
-.chat-welcome { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center; gap: 12px; padding: 24px; }
-.welcome-icon { width: 72px; height: 72px; border-radius: 50%; background: rgba(102,126,234,0.1); display: flex; align-items: center; justify-content: center; margin-bottom: 8px; }
+.chat-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  gap: 12px;
+  padding: 24px;
+}
+.welcome-icon {
+  width: 76px; height: 76px;
+  border-radius: 50%;
+  background: rgba(109, 124, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+  box-shadow: 0 0 32px rgba(109, 124, 255, 0.15);
+  animation: float 4s ease-in-out infinite;
+}
 .chat-welcome h3 { font-size: 18px; font-weight: 600; color: #fff; }
-.chat-welcome p { font-size: 14px; color: #888; max-width: 300px; line-height: 1.6; }
+.chat-welcome p { font-size: 14px; color: var(--text-3); max-width: 300px; line-height: 1.6; }
 .welcome-suggestions { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; width: 100%; max-width: 320px; }
-.suggestion-chip { padding: 10px 16px; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; cursor: pointer; transition: all 0.2s; font-size: 13px; color: #aaa; }
-.suggestion-chip:hover { border-color: rgba(102,126,234,0.3); background: rgba(102,126,234,0.05); color: #fff; }
+.suggestion-chip {
+  padding: 10px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.25s var(--ease-out);
+  font-size: 13px;
+  color: var(--text-2);
+  background: rgba(255, 255, 255, 0.02);
+}
+.suggestion-chip:hover {
+  border-color: rgba(109, 124, 255, 0.4);
+  background: rgba(109, 124, 255, 0.08);
+  color: #fff;
+  transform: translateX(4px);
+}
 
-.message { display: flex; gap: 8px; margin-bottom: 16px; }
-.message-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.message.user .message-avatar { background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; }
-.message.assistant .message-avatar { background: linear-gradient(135deg, #43e97b, #38f9d7); color: #fff; }
+.message {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  animation: fadeInUp 0.4s var(--ease-out);
+}
+.message-avatar {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.message.user .message-avatar {
+  background: linear-gradient(135deg, #6d7cff, #a855f7);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(109, 124, 255, 0.3);
+}
+.message.assistant .message-avatar {
+  background: linear-gradient(135deg, #34d399, #22d3ee);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(52, 211, 153, 0.3);
+}
 .message-content { flex: 1; }
-.message-text { padding: 10px 14px; border-radius: 8px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; color: #ddd; }
-.message.user .message-text { background: rgba(102,126,234,0.1); }
-.message.assistant .message-text { background: rgba(67,233,123,0.08); }
+.message-text {
+  padding: 10px 14px;
+  border-radius: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-1);
+}
+.message.user .message-text { background: rgba(109, 124, 255, 0.1); border: 1px solid rgba(109, 124, 255, 0.15); }
+.message.assistant .message-text { background: rgba(52, 211, 153, 0.08); border: 1px solid rgba(52, 211, 153, 0.12); }
 .message-images { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-.msg-img { width: 120px; height: 120px; border-radius: 6px; }
+.msg-img { width: 120px; height: 120px; border-radius: 8px; }
 .typing::after { content: '▋'; animation: blink 1s infinite; }
 @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
 
-.chat-input { border-top: 1px solid rgba(255,255,255,0.06); padding: 12px; }
+.chat-input { border-top: 1px solid var(--line); padding: 12px; }
 .uploaded-images { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
 .uploaded-img-wrapper { position: relative; }
-.uploaded-img { width: 80px; height: 80px; border-radius: 6px; }
+.uploaded-img { width: 80px; height: 80px; border-radius: 8px; }
 .remove-img-btn { position: absolute; top: -8px; right: -8px; }
 .input-row { display: flex; gap: 8px; align-items: flex-end; }
 .input-options { margin-top: 8px; }
-.chat-locked-notice { padding: 20px; text-align: center; color: #666; border-top: 1px solid rgba(255,255,255,0.06); display: flex; align-items: center; justify-content: center; gap: 8px; }
+.chat-locked-notice {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-4);
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
 
 /* 右侧展示 */
-.preview-panel { flex: 1; display: flex; flex-direction: column; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; overflow: hidden; }
-.preview-header { padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.06); display: flex; align-items: center; gap: 8px; font-weight: 600; color: #fff; }
+.preview-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+.preview-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: #fff;
+}
 .preview-tabs { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
 .preview-tabs :deep(.el-tabs__content) { flex: 1; overflow-y: auto; padding: 16px; }
 
 .image-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-.image-item { border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; overflow: hidden; }
+.image-item {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  transition: transform 0.3s var(--ease-out);
+}
+.image-item:hover { transform: scale(1.02); }
 .concept-img { width: 100%; height: 240px; cursor: pointer; }
 
 .model-viewer { display: flex; align-items: center; justify-content: center; height: 100%; }
-.model-placeholder { text-align: center; padding: 40px; color: #ccc; }
-.model-hint { color: #666; font-size: 12px; margin-top: 8px; }
+.model-placeholder { text-align: center; padding: 40px; color: var(--text-2); }
+.model-orb {
+  width: 96px; height: 96px;
+  margin: 0 auto 20px;
+  border-radius: 50%;
+  background: rgba(109, 124, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--brand-1);
+  box-shadow: 0 0 40px rgba(109, 124, 255, 0.15);
+  animation: float 4s ease-in-out infinite;
+}
+.model-hint { color: var(--text-4); font-size: 12px; margin-top: 8px; }
+
+.model3d-state {
+  height: 440px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 10px;
+  text-align: center; padding: 24px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+}
+.model3d-state .state-title { margin: 4px 0 0; font-size: 15px; color: var(--text-1); }
+.model3d-state .state-hint { margin: 0; font-size: 12px; color: var(--text-3); max-width: 420px; }
+.model3d-state .state-error { color: var(--el-color-warning); }
+.model3d-state .spin { animation: spin 1s linear infinite; color: var(--brand-cyan); }
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>

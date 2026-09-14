@@ -1,13 +1,14 @@
 <template>
   <div class="series-create-page">
-    <div class="page-header">
+    <div class="page-header" v-reveal>
       <el-button text @click="$router.back()">
         <el-icon><ArrowLeft /></el-icon>
         返回
       </el-button>
     </div>
 
-    <div class="create-card glass">
+    <div class="create-card glass-strong" v-reveal="{ delay: 0.1 }">
+      <div class="create-glow"></div>
       <h1 class="form-title">创建系列</h1>
       <p class="form-desc">给你的原创手办系列起个名字,选择规格和尺寸</p>
 
@@ -21,7 +22,7 @@
             <div
               v-for="t in tierOptions"
               :key="t.value"
-              class="tier-option"
+              class="tier-option glass-card"
               :class="{ active: form.specTier === t.value }"
               @click="form.specTier = t.value"
             >
@@ -43,7 +44,7 @@
         </el-form-item>
 
         <el-form-item>
-          <el-button type="primary" round size="large" :loading="loading" @click="handleSubmit" style="width: 200px">
+          <el-button round size="large" class="btn-liquid" :loading="loading" @click="handleSubmit" style="width: 220px">
             创建系列
           </el-button>
         </el-form-item>
@@ -104,47 +105,64 @@ async function handleSubmit() {
 }
 
 .create-card {
-  padding: 40px;
-  border-radius: 20px;
+  padding: 44px;
+  border-radius: var(--radius-xl);
+  position: relative;
+  overflow: hidden;
+}
+
+.create-glow {
+  position: absolute;
+  top: -40%; right: -20%;
+  width: 60%; height: 80%;
+  background: radial-gradient(circle, rgba(109, 124, 255, 0.14), transparent 60%);
+  filter: blur(40px);
+  pointer-events: none;
 }
 
 .form-title {
-  font-size: 28px;
+  font-size: 30px;
   font-weight: 700;
   color: #fff;
+  background: var(--gradient-brand);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradientShift 6s ease infinite;
   margin-bottom: 8px;
+  position: relative;
+  z-index: 1;
 }
 
 .form-desc {
   font-size: 14px;
-  color: #666;
+  color: var(--text-3);
   margin-bottom: 32px;
+  position: relative;
+  z-index: 1;
 }
 
 .tier-selector {
   display: flex;
   gap: 12px;
   width: 100%;
+  position: relative;
+  z-index: 1;
 }
 
 .tier-option {
   flex: 1;
   padding: 20px;
   border-radius: 14px;
-  border: 2px solid rgba(255, 255, 255, 0.08);
   cursor: pointer;
-  transition: all 0.3s;
   text-align: center;
 }
 
-.tier-option:hover {
-  border-color: rgba(102, 126, 234, 0.3);
-  background: rgba(255, 255, 255, 0.03);
-}
-
 .tier-option.active {
-  border-color: #667eea;
-  background: rgba(102, 126, 234, 0.08);
+  border-color: rgba(109, 124, 255, 0.5) !important;
+  background: rgba(109, 124, 255, 0.1) !important;
+  box-shadow: 0 0 24px rgba(109, 124, 255, 0.15), var(--glass-highlight);
 }
 
 .tier-option-name {
@@ -155,7 +173,10 @@ async function handleSubmit() {
 }
 
 .tier-option.active .tier-option-name {
-  color: #667eea;
+  background: var(--gradient-brand);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .tier-option-detail {
@@ -163,6 +184,6 @@ async function handleSubmit() {
   flex-direction: column;
   gap: 4px;
   font-size: 13px;
-  color: #888;
+  color: var(--text-3);
 }
 </style>

@@ -1,12 +1,12 @@
 <template>
   <div class="series-list-page">
     <!-- 页头 -->
-    <div class="page-header">
+    <div class="page-header" v-reveal>
       <div>
         <h1 class="page-title">我的系列</h1>
         <p class="page-desc">管理你的原创手办设计系列</p>
       </div>
-      <el-button type="primary" round size="large" @click="$router.push('/series/create')">
+      <el-button round size="large" class="btn-liquid" @click="$router.push('/series/create')">
         <el-icon class="el-icon--left"><Plus /></el-icon>
         创建系列
       </el-button>
@@ -18,11 +18,13 @@
     </div>
 
     <!-- 空状态 -->
-    <div v-else-if="series.length === 0" class="empty-state glass">
-      <el-icon :size="64" color="#333"><FolderOpened /></el-icon>
+    <div v-else-if="series.length === 0" class="empty-state glass-card">
+      <div class="empty-orb">
+        <el-icon :size="56"><FolderOpened /></el-icon>
+      </div>
       <h3>还没有系列</h3>
       <p>创建你的第一个原创手办设计系列,开始 AI 对话设计之旅</p>
-      <el-button type="primary" round size="large" @click="$router.push('/series/create')">
+      <el-button round size="large" class="btn-liquid" @click="$router.push('/series/create')">
         <el-icon class="el-icon--left"><Plus /></el-icon>
         创建第一个系列
       </el-button>
@@ -30,8 +32,16 @@
 
     <!-- 系列卡片 -->
     <div v-else class="series-grid">
-      <div v-for="s in series" :key="s.id" class="series-card" @click="$router.push(`/series/${s.id}`)">
-        <div class="card-visual" :style="{ background: getGradient(s.id) }">
+      <div
+        v-for="(s, i) in series"
+        :key="s.id"
+        class="series-card glass-card"
+        :style="{ '--card-gradient': getGradient(s.id) }"
+        v-reveal="{ index: i }"
+        @click="$router.push(`/series/${s.id}`)"
+      >
+        <div class="card-visual">
+          <div class="card-visual-bg"></div>
           <span class="card-spec">{{ tierLabel(s.specTier) }}</span>
           <span class="card-size">{{ s.sizeTier }}</span>
         </div>
@@ -72,12 +82,12 @@ const tiers = {
 function tierLabel(t) { return tiers[t]?.label || t }
 
 const gradients = [
-  'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-  'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-  'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-  'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
-  'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-  'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)'
+  'linear-gradient(135deg, #6d7cff 0%, #a855f7 100%)',
+  'linear-gradient(135deg, #f093fb 0%, #ec4899 100%)',
+  'linear-gradient(135deg, #22d3ee 0%, #34d399 100%)',
+  'linear-gradient(135deg, #34d399 0%, #38f9d7 100%)',
+  'linear-gradient(135deg, #fa709a 0%, #fbbf24 100%)',
+  'linear-gradient(135deg, #a855f7 0%, #6d7cff 100%)'
 ]
 
 function getGradient(id) {
@@ -115,14 +125,20 @@ onMounted(async () => {
 }
 
 .page-title {
-  font-size: 28px;
+  font-size: 30px;
   font-weight: 700;
   color: #fff;
+  background: var(--gradient-brand);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradientShift 6s ease infinite;
 }
 
 .page-desc {
   font-size: 14px;
-  color: #666;
+  color: var(--text-3);
   margin-top: 4px;
 }
 
@@ -135,7 +151,7 @@ onMounted(async () => {
 
 .skeleton-card {
   height: 280px;
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.06);
   animation: pulse 1.5s ease-in-out infinite;
@@ -148,19 +164,32 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   padding: 80px 24px;
-  border-radius: 16px;
   text-align: center;
+}
+
+.empty-orb {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: rgba(109, 124, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--brand-1);
+  margin-bottom: 20px;
+  box-shadow: 0 0 40px rgba(109, 124, 255, 0.15);
+  animation: float 4s ease-in-out infinite;
 }
 
 .empty-state h3 {
   font-size: 20px;
   color: #fff;
-  margin: 20px 0 8px;
+  margin: 0 0 8px;
 }
 
 .empty-state p {
   font-size: 14px;
-  color: #666;
+  color: var(--text-3);
   margin-bottom: 24px;
 }
 
@@ -172,35 +201,40 @@ onMounted(async () => {
 }
 
 .series-card {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
   cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.series-card:hover {
-  transform: translateY(-4px);
-  border-color: rgba(102, 126, 234, 0.3);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
 .card-visual {
-  height: 140px;
+  height: 150px;
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  padding: 12px;
+  padding: 14px;
   position: relative;
   overflow: hidden;
 }
 
-.card-visual::before {
+.card-visual-bg {
+  position: absolute;
+  inset: 0;
+  background: var(--card-gradient);
+  opacity: 0.9;
+}
+
+.card-visual-bg::before {
   content: '';
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at 30% 20%, rgba(255,255,255,0.15), transparent 50%);
+  background: radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.22), transparent 55%);
+}
+
+.card-visual-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 70% 90%, rgba(0, 0, 0, 0.25), transparent 60%);
 }
 
 .card-spec, .card-size {
@@ -209,7 +243,11 @@ onMounted(async () => {
   color: #fff;
   font-size: 12px;
   font-weight: 600;
-  text-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(8px);
 }
 
 .card-body {
@@ -240,12 +278,17 @@ onMounted(async () => {
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  color: #666;
+  color: var(--text-4);
 }
 
 .card-arrow {
   font-size: 13px;
-  color: #667eea;
+  color: var(--brand-1);
+  transition: transform 0.25s var(--ease-out);
+}
+
+.series-card:hover .card-arrow {
+  transform: translateX(4px);
 }
 
 @media (max-width: 768px) {

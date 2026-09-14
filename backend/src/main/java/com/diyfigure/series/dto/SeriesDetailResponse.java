@@ -47,6 +47,8 @@ public class SeriesDetailResponse {
     @AllArgsConstructor
     public static class CanvasSummary {
         private Long id;
+        /** 角色名称 */
+        private String name;
         private CanvasStatus status;
         private String model3dUrl;
         private String firstConceptImage;

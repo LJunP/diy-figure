@@ -4,14 +4,17 @@ import com.diyfigure.canvas.dto.CanvasDetailResponse;
 import com.diyfigure.canvas.dto.CanvasCreateRequest;
 import com.diyfigure.canvas.dto.ChatRequest;
 import com.diyfigure.common.enums.CanvasStatus;
+import com.diyfigure.common.enums.Model3dStatus;
 import com.diyfigure.common.exception.BusinessException;
 import com.diyfigure.common.response.ResultCode;
 import com.diyfigure.entity.Canvas;
 import com.diyfigure.entity.Series;
 import com.diyfigure.integration.ai.MeshyAiService;
+import com.diyfigure.integration.ai.Model3dTaskService;
 import com.diyfigure.integration.ai.OpenAiService;
 import com.diyfigure.integration.oss.OssService;
 import com.diyfigure.repository.CanvasRepository;
+import com.diyfigure.repository.OrderCanvasRepository;
 import com.diyfigure.series.SeriesService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,6 +51,8 @@ public class CanvasService {
     private final OpenAiService openAiService;
     private final OssService ossService;
     private final MeshyAiService meshyAiService;
+    private final Model3dTaskService model3dTaskService;
+    private final OrderCanvasRepository orderCanvasRepository;
 
     /**
      * 在系列下创建新画布
@@ -57,15 +62,23 @@ public class CanvasService {
         // 校验系列归属权
         seriesService.getSeriesByIdAndUserId(seriesId, userId);
 
+        // DTO 上已有 @NotBlank,这里再兜一次:直连 service 的调用方(测试、内部任务)
+        // 可能绕过参数校验,不能把 null 写进 NOT NULL 列。
+        String name = request.getName() == null ? "" : request.getName().trim();
+        if (name.isEmpty()) {
+            name = "未命名角色";
+        }
+
         Canvas canvas = Canvas.builder()
                 .seriesId(seriesId)
+                .name(name)
                 .status(CanvasStatus.DESIGNING)
                 .conceptImageUrls(new ArrayList<>())
                 .aiConversation(new ArrayList<>())
                 .locked(false)
                 .build();
         canvas = canvasRepository.save(canvas);
-        log.info("创建画布: id={}, seriesId={}", canvas.getId(), seriesId);
+        log.info("创建画布: id={}, seriesId={}, name={}", canvas.getId(), seriesId, name);
         return canvas;
     }
 
@@ -80,13 +93,16 @@ public class CanvasService {
 
     /**
      * 删除画布
-     * 锁定的画布不可删除
+     * 锁定的画布不可删除;已被订单引用(order_canvas)的画布不可删除
      */
     @Transactional
     public void deleteCanvas(Long canvasId, Long userId) {
         Canvas canvas = getCanvasByIdAndUserId(canvasId, userId);
         if (canvas.getLocked()) {
             throw new BusinessException(ResultCode.CANVAS_LOCKED);
+        }
+        if (orderCanvasRepository.existsByCanvasId(canvasId)) {
+            throw new BusinessException(ResultCode.CONFLICT, "该设计已被订单引用,不能删除");
         }
         canvasRepository.delete(canvas);
         log.info("删除画布: id={}", canvasId);
@@ -101,6 +117,9 @@ public class CanvasService {
      * 3. 对话完成后,将完整回复保存到对话记录
      * 4. 如果 generateImage=true,调用 DALL-E 3 生成概念图
      *
+     * 注意:对话不触发 3D 生成。3D 只在定稿时入队(见 finalizeCanvas)——
+     * 3D 用的是定稿那一刻的第一张概念图,设计还在迭代时生成既无意义又浪费外部配额。
+     *
      * @param canvasId 画布 ID
      * @param userId   用户 ID
      * @param request  对话请求
@@ -110,9 +129,15 @@ public class CanvasService {
     public void chat(Long canvasId, Long userId, ChatRequest request, SseEmitter emitter) {
         Canvas canvas = getCanvasByIdAndUserId(canvasId, userId);
 
-        // 锁定的画布不可对话
         if (canvas.getLocked()) {
             throw new BusinessException(ResultCode.CANVAS_LOCKED);
+        }
+        if (canvas.getStatus() != CanvasStatus.DESIGNING) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "已定稿的画布请先重新打开再继续对话");
+        }
+        if ((request.getMessage() == null || request.getMessage().isBlank())
+                && (request.getImageUrls() == null || request.getImageUrls().isEmpty())) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "请输入消息或上传参考图");
         }
 
         // 1. 保存用户消息到对话记录
@@ -219,18 +244,11 @@ public class CanvasService {
         canvas.setFinalizedAt(LocalDateTime.now());
         canvasRepository.save(canvas);
 
-        // 触发 3D 模型生成(使用第一张概念图)
-        // TODO: 正式环境应使用异步线程池,当前同步执行避免引入额外复杂度
-        try {
-            String firstImage = canvas.getConceptImageUrls().get(0);
-            String model3dUrl = meshyAiService.generate3dModelSync(firstImage);
-            canvas.setModel3dUrl(model3dUrl);
-            canvasRepository.save(canvas);
-            log.info("3D 模型生成完成: canvasId={}, modelUrl={}", canvasId, model3dUrl);
-        } catch (Exception e) {
-            // 3D 生成失败不阻塞定稿流程,用户可以后续重新生成
-            log.warn("3D 模型生成失败(不阻塞定稿): canvasId={}, error={}", canvasId, e.getMessage());
-        }
+        // 触发 3D 模型生成:只入队,由 Model3dTaskService 的定时任务推进。
+        // 旧实现在这里同步轮询 Meshy(最长 5 分钟),会导致前端 30 秒超时且请求长时间挂起。
+        model3dTaskService.enqueue(canvas);
+        canvasRepository.save(canvas);
+        log.info("3D 生成任务已入队: canvasId={}", canvasId);
 
         // 检查系列是否达到档位要求
         seriesService.updateDesignStatusIfNeeded(canvas.getSeriesId());
@@ -257,6 +275,8 @@ public class CanvasService {
 
         canvas.setStatus(CanvasStatus.DESIGNING);
         canvas.setFinalizedAt(null);
+        // 设计要改了,上一版定稿生成的 3D 模型已经不对应当前设计,一并清空
+        model3dTaskService.reset(canvas);
         canvasRepository.save(canvas);
 
         // 更新系列设计状态
@@ -280,13 +300,38 @@ public class CanvasService {
         return canvas;
     }
 
+    /**
+     * 重新生成 3D 参考模型(受控重试)
+     *
+     * 仅允许在生成失败后调用,且画布未锁定。成功或生成中不允许重复提交,
+     * 避免重复占用外部配额。
+     */
+    @Transactional
+    public CanvasDetailResponse retryModel3d(Long canvasId, Long userId) {
+        Canvas canvas = getCanvasByIdAndUserId(canvasId, userId);
+
+        if (canvas.getLocked()) {
+            throw new BusinessException(ResultCode.CANVAS_LOCKED);
+        }
+        if (canvas.getModel3dStatus() != Model3dStatus.FAILED) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "仅生成失败的模型可以重试");
+        }
+
+        model3dTaskService.requeue(canvas);
+        log.info("用户重试 3D 生成: canvasId={}, userId={}", canvasId, userId);
+        return toDetailResponse(canvas);
+    }
+
     private CanvasDetailResponse toDetailResponse(Canvas canvas) {
         return CanvasDetailResponse.builder()
                 .id(canvas.getId())
                 .seriesId(canvas.getSeriesId())
+                .name(canvas.getName())
                 .status(canvas.getStatus().name())
                 .conceptImageUrls(canvas.getConceptImageUrls())
                 .model3dUrl(canvas.getModel3dUrl())
+                .model3dStatus(canvas.getModel3dStatus() != null
+                        ? canvas.getModel3dStatus().name() : Model3dStatus.NONE.name())
                 .aiConversation(canvas.getAiConversation())
                 .locked(canvas.getLocked())
                 .createdAt(canvas.getCreatedAt())

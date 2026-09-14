@@ -1,5 +1,6 @@
 package com.diyfigure.repository;
 
+import com.diyfigure.common.enums.Model3dStatus;
 import com.diyfigure.entity.Canvas;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -26,4 +27,9 @@ public interface CanvasRepository extends JpaRepository<Canvas, Long> {
      * 统计系列下画布总数
      */
     long countBySeriesId(Long seriesId);
+
+    /**
+     * 按 3D 生成状态捞取画布(异步生成调度用)
+     */
+    List<Canvas> findByModel3dStatus(com.diyfigure.common.enums.Model3dStatus status);
 }

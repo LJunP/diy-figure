@@ -7,6 +7,7 @@ import com.diyfigure.common.response.ResultCode;
 import com.diyfigure.entity.Canvas;
 import com.diyfigure.entity.Series;
 import com.diyfigure.repository.CanvasRepository;
+import com.diyfigure.repository.OrderRepository;
 import com.diyfigure.repository.SeriesRepository;
 import com.diyfigure.series.dto.SeriesCreateRequest;
 import com.diyfigure.series.dto.SeriesDetailResponse;
@@ -37,6 +38,7 @@ public class SeriesService {
 
     private final SeriesRepository seriesRepository;
     private final CanvasRepository canvasRepository;
+    private final OrderRepository orderRepository;
 
     /**
      * 创建系列
@@ -107,12 +109,18 @@ public class SeriesService {
 
     /**
      * 删除系列(级联删除画布)
-     * 注意:如果系列已进入交易流程(有关联订单),不允许删除
+     *
+     * 删除保护:系列一旦产生订单(含补购订单),其画布会被 order_canvas 引用。
+     * 此时删除会破坏历史订单的履约依据,因此一律拒绝删除。
      */
     @Transactional
     public void deleteSeries(Long seriesId, Long userId) {
         Series series = getSeriesByIdAndUserId(seriesId, userId);
-        // TODO: Phase 4 添加检查:如果系列已有关联订单,禁止删除
+
+        if (orderRepository.existsBySeriesId(seriesId)) {
+            throw new BusinessException(ResultCode.CONFLICT, "该系列已产生订单,不能删除");
+        }
+
         List<Canvas> canvases = canvasRepository.findBySeriesIdOrderByCreatedAtAsc(seriesId);
         canvasRepository.deleteAll(canvases);
         seriesRepository.delete(series);
@@ -159,6 +167,7 @@ public class SeriesService {
                 : null;
         return SeriesDetailResponse.CanvasSummary.builder()
                 .id(canvas.getId())
+                .name(canvas.getName())
                 .status(canvas.getStatus())
                 .model3dUrl(canvas.getModel3dUrl())
                 .firstConceptImage(firstImage)

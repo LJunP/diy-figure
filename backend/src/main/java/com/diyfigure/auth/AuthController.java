@@ -3,6 +3,7 @@ package com.diyfigure.auth;
 import com.diyfigure.auth.dto.AuthResponse;
 import com.diyfigure.auth.dto.LoginRequest;
 import com.diyfigure.auth.dto.RegisterRequest;
+import com.diyfigure.auth.dto.TokenRequest;
 import com.diyfigure.auth.dto.UpdatePasswordRequest;
 import com.diyfigure.common.response.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
@@ -13,11 +14,17 @@ import org.springframework.web.bind.annotation.*;
 /**
  * 认证控制器
  *
- * 接口清单(对应 03-技术设计说明书.md 第 7.1 节):
- * - POST /api/auth/register  注册
- * - POST /api/auth/login     登录,返回 JWT
- * - GET  /api/auth/me        获取当前用户信息
- * - PUT  /api/auth/password  修改密码
+ * 公开接口(JWT 白名单):
+ * - POST /api/auth/register
+ * - POST /api/auth/login
+ * - POST /api/auth/verify-email
+ * - POST /api/auth/resend-verification
+ * - POST /api/auth/forgot-password
+ * - POST /api/auth/reset-password
+ *
+ * 需登录:
+ * - GET  /api/auth/me
+ * - PUT  /api/auth/password
  */
 @RestController
 @RequestMapping("/auth")
@@ -26,36 +33,46 @@ public class AuthController {
 
     private final AuthService authService;
 
-    /**
-     * 用户注册
-     */
     @PostMapping("/register")
     public ApiResponse<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
         return ApiResponse.success(authService.register(request));
     }
 
-    /**
-     * 用户登录
-     */
     @PostMapping("/login")
     public ApiResponse<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         return ApiResponse.success(authService.login(request));
     }
 
-    /**
-     * 获取当前登录用户信息
-     * 需要携带 token
-     */
+    @PostMapping("/verify-email")
+    public ApiResponse<Void> verifyEmail(@Valid @RequestBody TokenRequest.Verify body) {
+        authService.verifyEmail(body.getToken());
+        return ApiResponse.success();
+    }
+
+    @PostMapping("/resend-verification")
+    public ApiResponse<Void> resendVerification(@Valid @RequestBody TokenRequest.EmailOnly body) {
+        authService.resendVerification(body.getEmail());
+        return ApiResponse.success();
+    }
+
+    @PostMapping("/forgot-password")
+    public ApiResponse<Void> forgotPassword(@Valid @RequestBody TokenRequest.EmailOnly body) {
+        authService.forgotPassword(body.getEmail());
+        return ApiResponse.success();
+    }
+
+    @PostMapping("/reset-password")
+    public ApiResponse<Void> resetPassword(@Valid @RequestBody TokenRequest.ResetPassword body) {
+        authService.resetPassword(body.getToken(), body.getNewPassword());
+        return ApiResponse.success();
+    }
+
     @GetMapping("/me")
     public ApiResponse<AuthResponse.UserInfo> getCurrentUser(HttpServletRequest request) {
         Long userId = (Long) request.getAttribute(JwtInterceptor.CURRENT_USER_ID);
         return ApiResponse.success(authService.getUserInfo(userId));
     }
 
-    /**
-     * 修改密码
-     * 需要携带 token
-     */
     @PutMapping("/password")
     public ApiResponse<Void> updatePassword(HttpServletRequest request,
                                             @Valid @RequestBody UpdatePasswordRequest body) {

@@ -1,5 +1,7 @@
 <template>
   <div class="admin-layout">
+    <AmbientBackground :particles="false" />
+
     <!-- 侧边栏 -->
     <aside class="admin-sidebar">
       <div class="sidebar-brand">
@@ -12,7 +14,7 @@
 
       <nav class="sidebar-nav">
         <router-link to="/admin" class="sidebar-item" :class="{ active: $route.path === '/admin' }">
-          <el-icon :size="20"><Dashboard /></el-icon>
+          <el-icon :size="20"><Odometer /></el-icon>
           <span>控制台</span>
         </router-link>
         <router-link to="/admin/reviews" class="sidebar-item">
@@ -49,11 +51,16 @@
             <span>{{ userStore.username }}</span>
             <el-tag size="small" type="danger" effect="dark">ADMIN</el-tag>
           </span>
+          <el-button text @click="handleLogout">退出</el-button>
         </div>
       </header>
 
       <main class="admin-content">
-        <router-view />
+        <router-view v-slot="{ Component }">
+          <transition name="fade" mode="out-in">
+            <component :is="Component" />
+          </transition>
+        </router-view>
       </main>
     </div>
   </div>
@@ -61,13 +68,19 @@
 
 <script setup>
 import { ref, onMounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { getDashboardStats } from '@/api/admin'
-import { Dashboard, DocumentChecked, Money, Setting, Back } from '@element-plus/icons-vue'
+import { Odometer, DocumentChecked, Money, Setting, Back } from '@element-plus/icons-vue'
+import AmbientBackground from '@/components/AmbientBackground.vue'
 
 const userStore = useUserStore()
 const route = useRoute()
+const router = useRouter()
+function handleLogout() {
+  userStore.logout()
+  router.push('/login')
+}
 const pendingCount = ref(0)
 const quoteCount = ref(0)
 
@@ -93,13 +106,16 @@ watch(() => route.fullPath, () => {
 .admin-layout {
   display: flex;
   min-height: 100vh;
-  background: #0d0d0d;
+  position: relative;
+  z-index: 1;
 }
 
 /* 侧边栏 */
 .admin-sidebar {
-  width: 220px;
-  background: #080808;
+  width: 232px;
+  background: rgba(5, 5, 10, 0.7);
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
   border-right: 1px solid rgba(255, 255, 255, 0.06);
   display: flex;
   flex-direction: column;
@@ -111,7 +127,7 @@ watch(() => route.fullPath, () => {
 }
 
 .sidebar-brand {
-  padding: 20px 24px;
+  padding: 22px 24px;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -121,7 +137,12 @@ watch(() => route.fullPath, () => {
 .brand-icon {
   font-size: 18px;
   font-weight: 900;
-  color: #667eea;
+  background: var(--gradient-brand);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradientShift 6s ease infinite;
 }
 
 .brand-text {
@@ -138,7 +159,7 @@ watch(() => route.fullPath, () => {
 
 .brand-sub {
   font-size: 11px;
-  color: #666;
+  color: var(--text-4);
 }
 
 .sidebar-nav {
@@ -154,37 +175,43 @@ watch(() => route.fullPath, () => {
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  border-radius: 10px;
-  color: #888;
+  border-radius: 12px;
+  color: var(--text-3);
   font-size: 14px;
-  transition: all 0.2s;
+  transition: all 0.25s var(--ease-out);
   position: relative;
+  overflow: hidden;
 }
 
-.sidebar-item:hover {
-  background: rgba(255, 255, 255, 0.04);
-  color: #ccc;
-}
-
-.sidebar-item.active {
-  background: rgba(102, 126, 234, 0.12);
-  color: #667eea;
-}
-
-.sidebar-item.active::before {
+.sidebar-item::before {
   content: '';
   position: absolute;
   left: 0;
   top: 50%;
-  transform: translateY(-50%);
+  transform: translateY(-50%) scaleY(0);
   width: 3px;
-  height: 20px;
-  background: #667eea;
+  height: 22px;
+  background: var(--gradient-brand);
   border-radius: 0 2px 2px 0;
+  transition: transform 0.3s var(--ease-out);
+}
+
+.sidebar-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-1);
+}
+
+.sidebar-item.active {
+  background: linear-gradient(90deg, rgba(109, 124, 255, 0.14), rgba(109, 124, 255, 0.02));
+  color: var(--brand-1);
+}
+
+.sidebar-item.active::before {
+  transform: translateY(-50%) scaleY(1);
 }
 
 .sidebar-badge :deep(.el-badge__content) {
-  background: #f56c6c;
+  background: var(--el-color-danger);
   border: none;
 }
 
@@ -198,35 +225,35 @@ watch(() => route.fullPath, () => {
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  color: #666;
+  color: var(--text-4);
   font-size: 13px;
-  border-radius: 8px;
-  transition: all 0.2s;
+  border-radius: 10px;
+  transition: all 0.25s var(--ease-out);
 }
 
 .back-link:hover {
   background: rgba(255, 255, 255, 0.04);
-  color: #ccc;
+  color: var(--text-1);
 }
 
 /* 主内容 */
 .admin-main {
   flex: 1;
-  margin-left: 220px;
+  margin-left: 232px;
   display: flex;
   flex-direction: column;
   min-height: 100vh;
 }
 
 .admin-header {
-  height: 64px;
+  height: 66px;
   padding: 0 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(13, 13, 13, 0.85);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: rgba(7, 7, 14, 0.7);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   position: sticky;
   top: 0;
@@ -234,9 +261,15 @@ watch(() => route.fullPath, () => {
 }
 
 .page-title {
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 20px;
+  font-weight: 700;
   color: #fff;
+  background: var(--gradient-brand);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradientShift 6s ease infinite;
 }
 
 .header-right {
@@ -248,26 +281,30 @@ watch(() => route.fullPath, () => {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #ccc;
+  color: var(--text-2);
   font-size: 14px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .admin-avatar {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #f56c6c 0%, #e6a23c 100%);
+  background: linear-gradient(135deg, #f87171 0%, #fbbf24 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 14px;
   font-weight: 700;
   color: #fff;
+  box-shadow: 0 0 12px rgba(248, 113, 113, 0.4);
 }
 
 .admin-content {
   flex: 1;
-  padding: 24px 32px;
+  padding: 28px 32px;
   overflow-y: auto;
 }
 </style>

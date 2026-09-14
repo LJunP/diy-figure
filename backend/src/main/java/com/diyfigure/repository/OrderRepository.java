@@ -3,9 +3,14 @@ package com.diyfigure.repository;
 import com.diyfigure.common.enums.OrderStatus;
 import com.diyfigure.common.enums.OrderType;
 import com.diyfigure.entity.OrderEntity;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -56,4 +61,18 @@ public interface OrderRepository extends JpaRepository<OrderEntity, Long> {
      * 按 ID 查询订单(含关联数据)
      */
     Optional<OrderEntity> findById(Long id);
+
+    /**
+     * 判断某系列是否已产生订单(用于删除保护)
+     */
+    boolean existsBySeriesId(Long seriesId);
+
+    boolean existsByAddressId(Long addressId);
+
+    boolean existsBySeriesIdAndOrderTypeAndStatusNotIn(Long seriesId, OrderType orderType,
+                                                       Collection<OrderStatus> statuses);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT o FROM OrderEntity o WHERE o.id = :id")
+    Optional<OrderEntity> findByIdForUpdate(@Param("id") Long id);
 }

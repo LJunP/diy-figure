@@ -1,0 +1,75 @@
+# 集成测试专用配置
+#
+# 目标:让「下单 → 终审 → 报价 → 抽奖 → 支付 → 生产 → 质检 → 发货 → 完成」
+# 这条主链路,以及返工 / 取消 / 补购 / 过期等分支,成为可重复运行的自动化回归。
+#
+# 设计要点:
+# 1. 使用独立 schema diy_figure_it,与开发库 diy_figure 完全隔离,测试不会污染开发数据
+# 2. ddl-auto=validate + Flyway 迁移:这本身就是一条断言
+#    —— 只要 db/migration 下的脚本与 JPA 实体不一致,测试必然启动失败
+# 3. 每次测试前由 Flyway clean + migrate 重建表结构,用例之间零残留
+#
+# 本地运行前先建库:
+#   CREATE DATABASE diy_figure_it DEFAULT CHARACTER SET utf8mb4;
+# 再执行:
+#   mvn test -DTEST_DB_PASSWORD=你的root密码
+#
+# CI(见 .github/workflows/ci.yml)由 mysql service 提供同名库和环境变量。
+spring:
+  datasource:
+    url: jdbc:mysql://${TEST_DB_HOST:localhost}:${TEST_DB_PORT:3306}/${TEST_DB_NAME:diy_figure_it}?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: ${TEST_DB_USER:root}
+    password: ${TEST_DB_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      # 不做任何自动建表/改表,只校验:实体 == Flyway 建出来的表
+      ddl-auto: validate
+    show-sql: false
+
+  flyway:
+    enabled: true
+    # 允许测试环境 clean 重建(生产环境由 application-prod.yml 显式禁用)
+    clean-disabled: false
+    baseline-on-migrate: true
+    baseline-version: 1
+    locations: classpath:db/migration
+    validate-on-migrate: false
+
+  # 邮件未配置时 EmailService 自动降级为只记日志;这里强制置空,
+  # 避免开发者本机设了 SPRING_MAIL_HOST 导致测试真的往外发信
+  mail:
+    host: ""
+
+# 关掉定时任务(3D 任务轮询、补购窗口扫描)。
+# ★ 不要写成 spring.task.scheduling.enabled —— 那不是一个真实存在的 Spring Boot 属性,
+#   设了也不会生效,调度线程照样起来,并可能在 Flyway clean 重建表的过程中查表报错。
+#   真正的开关是下面这个,由 Model3dTaskService / RefillExpiryScheduler 自己读。
+logging:
+  level:
+    com.diyfigure: info
+    org.hibernate.SQL: warn
+    org.hibernate.type.descriptor.sql.BasicBinder: warn
+    org.flywaydb: warn
+
+payment:
+  # 集成测试依赖模拟支付把订单推进到已支付状态
+  mock-enabled: true
+  callback:
+    wechat-api-key: test-wechat-callback-key
+    alipay-api-key: test-alipay-callback-key
+
+diy:
+  scheduling:
+    enabled: false
+  # 本地文件存储:测试落到 target/ 下,不污染仓库也不写用户目录
+  local-storage:
+    dir: ./target/test-uploads
+    enabled: true
+  # 留空 = 按请求推导前缀
+  public-base-url: ""
+
+admin:
+  init:
+    enabled: false

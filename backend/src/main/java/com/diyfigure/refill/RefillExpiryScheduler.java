@@ -27,6 +27,10 @@ public class RefillExpiryScheduler {
 
     private final OrderCanvasRepository orderCanvasRepository;
 
+    /** 调度总开关,测试环境置 false(见 src/test/resources/application-test.yml) */
+    @org.springframework.beans.factory.annotation.Value("${diy.scheduling.enabled:true}")
+    private boolean schedulingEnabled;
+
     /**
      * 每日凌晨 2:00 扫描过期的补购窗口
      *
@@ -35,6 +39,9 @@ public class RefillExpiryScheduler {
      */
     @Scheduled(cron = "0 0 2 * * ?")
     public void scanExpiredRefillWindows() {
+        if (!schedulingEnabled) {
+            return;
+        }
         LocalDate today = LocalDate.now();
         log.info("开始扫描补购窗口到期: date={}", today);
 

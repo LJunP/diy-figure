@@ -22,4 +22,7 @@ public class AddressRequest {
     @NotBlank(message = "收货地址不能为空")
     @Size(max = 500, message = "地址最多 500 个字符")
     private String detail;
+
+    /** 是否设为默认地址 */
+    private Boolean isDefault;
 }

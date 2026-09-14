@@ -15,15 +15,38 @@ spring:
     deserialization:
       fail-on-unknown-properties: false
 
+  # 数据库版本迁移:表结构以 db/migration 下的脚本为准
+  # baseline-on-migrate: 对已存在的开发库自动打基线,不会重复执行 V1
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 1
+    locations: classpath:db/migration
+    validate-on-migrate: false
+
   jpa:
     hibernate:
-      # 开发环境自动建表,生产环境应改为 validate 或 none 并使用 Flyway
+      # 开发环境自动建表,生产环境为 validate(见 application-prod.yml)
       ddl-auto: update
     show-sql: true
     properties:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.MySQLDialect
+
+  # 邮件通知(可选)
+  # 不配置 SPRING_MAIL_HOST 时,邮件自动降级为只记日志,站内消息照常工作
+  mail:
+    host: ${SPRING_MAIL_HOST:}
+    port: ${SPRING_MAIL_PORT:587}
+    username: ${SPRING_MAIL_USERNAME:}
+    password: ${SPRING_MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
 
   servlet:
     multipart:
@@ -40,6 +63,16 @@ jwt:
   # token 在请求头中的前缀
   header: Authorization
   prefix: "Bearer "
+
+# 支付配置
+payment:
+  # 模拟支付开关:真实环境部署时必须设为 false(可用环境变量 PAYMENT_MOCK_ENABLED 覆盖)
+  mock-enabled: ${PAYMENT_MOCK_ENABLED:true}
+  # 回调验签密钥。未配置时回调失败关闭,不会 ACK success。
+  # 接入官方 SDK 后,把验签替换成微信/支付宝证书校验,再调用 PaymentService.handleGatewayCallback。
+  callback:
+    wechat-api-key: ${WECHAT_PAY_API_KEY:}
+    alipay-api-key: ${ALIPAY_PAY_API_KEY:}
 
 # 阿里云 OSS 配置
 oss:
@@ -62,6 +95,25 @@ ai:
   meshy:
     api-key: ${MESHY_API_KEY:your-meshy-api-key}
     base-url: https://api.meshy.ai
+
+# 本地文件存储(OSS 未配置时的降级方案)
+# 上传的参考图落盘到 dir,通过 /uploads/** 对外提供访问。
+# 生产环境配好 OSS 后这段逻辑不会被走到,可用 DIY_LOCAL_STORAGE_ENABLED=false 彻底关闭。
+diy:
+  # 定时任务总开关(3D 任务轮询、补购窗口扫描)。
+  # 生产必须保持 true;集成测试置 false,避免调度线程在重建表时干扰用例。
+  scheduling:
+    enabled: ${DIY_SCHEDULING_ENABLED:true}
+  local-storage:
+    dir: ${DIY_LOCAL_STORAGE_DIR:./data/uploads}
+    enabled: ${DIY_LOCAL_STORAGE_ENABLED:true}
+  # 本地存储 URL 的对外前缀。留空 = 按当前请求推导(推荐,不会有端口/域名漂移)。
+  # 只有当服务挂在反向代理后面、请求头里的 host 不是最终对外域名时才需要显式配置,
+  # 例如 DIY_PUBLIC_BASE_URL=https://api.your-domain.com/api(必须含 context-path)
+  public-base-url: ${DIY_PUBLIC_BASE_URL:}
+  app:
+    # 邮件里验证/重置链接的前端地址
+    public-url: ${DIY_APP_PUBLIC_URL:http://localhost:5173}
 
 # 日志配置
 logging:

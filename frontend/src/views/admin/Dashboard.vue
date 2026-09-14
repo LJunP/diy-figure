@@ -1,7 +1,8 @@
 <template>
   <div class="admin-dashboard">
     <!-- 欢迎条 -->
-    <div class="welcome-bar glass">
+    <div class="welcome-bar glass-strong" v-reveal>
+      <div class="welcome-glow"></div>
       <div>
         <h2>欢迎回来,{{ userStore.username }}</h2>
         <p>当前共有 <strong>{{ totalPending }}</strong> 个待处理任务</p>
@@ -14,7 +15,13 @@
 
     <!-- 统计卡片 -->
     <div class="stats-grid">
-      <div v-for="card in statCards" :key="card.key" class="stat-card glass" @click="card.action?.()">
+      <div
+        v-for="(card, i) in statCards"
+        :key="card.key"
+        class="stat-card glass-card"
+        v-reveal="{ index: i }"
+        @click="card.action?.()"
+      >
         <div class="stat-icon" :style="{ background: card.bg, color: card.color }">
           <el-icon :size="22"><component :is="card.icon" /></el-icon>
         </div>
@@ -27,47 +34,36 @@
     </div>
 
     <!-- 快捷入口 -->
-    <div class="section-header">
+    <div class="section-header" v-reveal>
       <span class="section-label">QUICK ACCESS</span>
       <h3 class="section-title">快捷入口</h3>
     </div>
     <div class="quick-grid">
-      <div class="quick-card glass" @click="$router.push('/admin/reviews')">
-        <div class="quick-icon" style="background: rgba(102, 126, 234, 0.15); color: #667eea">
-          <el-icon :size="28"><DocumentChecked /></el-icon>
+      <div
+        v-for="(q, i) in quickCards"
+        :key="i"
+        class="quick-card glass-card"
+        v-reveal="{ index: i }"
+        @click="$router.push(q.to)"
+      >
+        <div class="quick-icon" :style="{ background: q.bg, color: q.color }">
+          <el-icon :size="28"><component :is="q.icon" /></el-icon>
         </div>
         <div class="quick-info">
-          <h4>待终审管理</h4>
-          <p>审核用户提交的角色设计</p>
+          <h4>{{ q.title }}</h4>
+          <p>{{ q.desc }}</p>
         </div>
-      </div>
-      <div class="quick-card glass" @click="$router.push('/admin/quotes')">
-        <div class="quick-icon" style="background: rgba(245, 87, 108, 0.15); color: #f5576c">
-          <el-icon :size="28"><Money /></el-icon>
-        </div>
-        <div class="quick-info">
-          <h4>待报价管理</h4>
-          <p>为终审通过的订单定价</p>
-        </div>
-      </div>
-      <div class="quick-card glass" @click="$router.push('/admin/production')">
-        <div class="quick-icon" style="background: rgba(67, 233, 123, 0.15); color: #43e97b">
-          <el-icon :size="28"><Setting /></el-icon>
-        </div>
-        <div class="quick-info">
-          <h4>生产物流管理</h4>
-          <p>生产、质检、发货全流程</p>
-        </div>
+        <el-icon class="stat-arrow"><ArrowRight /></el-icon>
       </div>
     </div>
 
     <!-- 订单状态分布 -->
-    <div class="section-header" style="margin-top: 40px">
+    <div class="section-header" style="margin-top: 40px" v-reveal>
       <span class="section-label">ORDER STATUS</span>
       <h3 class="section-title">订单状态分布</h3>
     </div>
     <div class="status-bars">
-      <div v-for="item in statusList" :key="item.key" class="status-bar-item">
+      <div v-for="(item, i) in statusList" :key="item.key" class="status-bar-item glass-card" v-reveal="{ index: i }">
         <div class="bar-header">
           <span class="bar-label">{{ item.label }}</span>
           <span class="bar-count">{{ stats[item.key] || 0 }}</span>
@@ -81,7 +77,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { getDashboardStats } from '@/api/admin'
@@ -96,27 +92,33 @@ const stats = ref({})
 const currentTime = ref('')
 
 const statCards = [
-  { key: 'pendingReviews', label: '待终审', icon: 'DocumentChecked', bg: 'rgba(102, 126, 234, 0.15)', color: '#667eea', action: () => router.push('/admin/reviews') },
-  { key: 'pendingQuotes', label: '待报价', icon: 'Money', bg: 'rgba(245, 87, 108, 0.15)', color: '#f5576c', action: () => router.push('/admin/quotes') },
-  { key: 'depositPending', label: '待付定金', icon: 'Wallet', bg: 'rgba(254, 225, 64, 0.15)', color: '#fee140' },
-  { key: 'inProduction', label: '生产中', icon: 'Setting', bg: 'rgba(67, 233, 123, 0.15)', color: '#43e97b', action: () => router.push('/admin/production') },
-  { key: 'pendingQc', label: '待质检', icon: 'Monitor', bg: 'rgba(79, 172, 254, 0.15)', color: '#4facfe', action: () => router.push('/admin/production') },
-  { key: 'balancePending', label: '待付尾款', icon: 'CreditCard', bg: 'rgba(240, 147, 251, 0.15)', color: '#f093fb' },
+  { key: 'pendingReviews', label: '待终审', icon: 'DocumentChecked', bg: 'rgba(109, 124, 255, 0.15)', color: '#6d7cff', action: () => router.push('/admin/reviews') },
+  { key: 'pendingQuotes', label: '待报价', icon: 'Money', bg: 'rgba(236, 72, 153, 0.15)', color: '#ec4899', action: () => router.push('/admin/quotes') },
+  { key: 'depositPending', label: '待付定金', icon: 'Wallet', bg: 'rgba(251, 191, 36, 0.15)', color: '#fbbf24' },
+  { key: 'inProduction', label: '生产中', icon: 'Setting', bg: 'rgba(52, 211, 153, 0.15)', color: '#34d399', action: () => router.push('/admin/production') },
+  { key: 'pendingQc', label: '待质检', icon: 'Monitor', bg: 'rgba(34, 211, 238, 0.15)', color: '#22d3ee', action: () => router.push('/admin/production') },
+  { key: 'balancePending', label: '待付尾款', icon: 'CreditCard', bg: 'rgba(168, 85, 247, 0.15)', color: '#a855f7' },
   { key: 'pendingShipping', label: '待发货', icon: 'Box', bg: 'rgba(168, 237, 234, 0.15)', color: '#a8edea', action: () => router.push('/admin/production') },
   { key: 'shipped', label: '已发货', icon: 'Box', bg: 'rgba(56, 249, 215, 0.15)', color: '#38f9d7' },
-  { key: 'completed', label: '已完成', icon: 'CircleCheck', bg: 'rgba(67, 233, 123, 0.15)', color: '#43e97b' }
+  { key: 'completed', label: '已完成', icon: 'CircleCheck', bg: 'rgba(52, 211, 153, 0.15)', color: '#34d399' }
+]
+
+const quickCards = [
+  { title: '待终审管理', desc: '审核用户提交的角色设计', icon: 'DocumentChecked', to: '/admin/reviews', bg: 'rgba(109, 124, 255, 0.15)', color: '#6d7cff' },
+  { title: '待报价管理', desc: '为终审通过的订单定价', icon: 'Money', to: '/admin/quotes', bg: 'rgba(236, 72, 153, 0.15)', color: '#ec4899' },
+  { title: '生产物流管理', desc: '生产、质检、发货全流程', icon: 'Setting', to: '/admin/production', bg: 'rgba(52, 211, 153, 0.15)', color: '#34d399' }
 ]
 
 const statusList = [
-  { key: 'pendingReviews', label: '待终审', color: 'linear-gradient(90deg, #667eea, #764ba2)' },
-  { key: 'pendingQuotes', label: '待报价', color: 'linear-gradient(90deg, #f5576c, #f093fb)' },
-  { key: 'depositPending', label: '待付定金', color: 'linear-gradient(90deg, #fee140, #fa709a)' },
-  { key: 'inProduction', label: '生产中', color: 'linear-gradient(90deg, #43e97b, #38f9d7)' },
-  { key: 'pendingQc', label: '待质检', color: 'linear-gradient(90deg, #4facfe, #00f2fe)' },
-  { key: 'balancePending', label: '待付尾款', color: 'linear-gradient(90deg, #f093fb, #f5576c)' },
+  { key: 'pendingReviews', label: '待终审', color: 'linear-gradient(90deg, #6d7cff, #a855f7)' },
+  { key: 'pendingQuotes', label: '待报价', color: 'linear-gradient(90deg, #ec4899, #f093fb)' },
+  { key: 'depositPending', label: '待付定金', color: 'linear-gradient(90deg, #fbbf24, #fa709a)' },
+  { key: 'inProduction', label: '生产中', color: 'linear-gradient(90deg, #34d399, #38f9d7)' },
+  { key: 'pendingQc', label: '待质检', color: 'linear-gradient(90deg, #22d3ee, #34d399)' },
+  { key: 'balancePending', label: '待付尾款', color: 'linear-gradient(90deg, #a855f7, #ec4899)' },
   { key: 'pendingShipping', label: '待发货', color: 'linear-gradient(90deg, #a8edea, #fed6e3)' },
-  { key: 'shipped', label: '已发货', color: 'linear-gradient(90deg, #38f9d7, #43e97b)' },
-  { key: 'completed', label: '已完成', color: 'linear-gradient(90deg, #43e97b, #38f9d7)' }
+  { key: 'shipped', label: '已发货', color: 'linear-gradient(90deg, #38f9d7, #34d399)' },
+  { key: 'completed', label: '已完成', color: 'linear-gradient(90deg, #34d399, #22d3ee)' }
 ]
 
 const totalPending = computed(() => {
@@ -146,8 +148,11 @@ onMounted(async () => {
     // ignore
   }
   updateTime()
-  setInterval(updateTime, 60000)
+  timer = setInterval(updateTime, 60000)
 })
+
+let timer
+onBeforeUnmount(() => { if (timer) clearInterval(timer) })
 </script>
 
 <style scoped>
@@ -162,32 +167,37 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   padding: 24px 32px;
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   margin-bottom: 24px;
+  position: relative;
+  overflow: hidden;
 }
 
-.welcome-bar h2 {
-  font-size: 22px;
-  font-weight: 700;
-  color: #fff;
-  margin-bottom: 4px;
+.welcome-glow {
+  position: absolute;
+  top: -50%; right: -10%;
+  width: 50%; height: 80%;
+  background: radial-gradient(circle, rgba(109, 124, 255, 0.14), transparent 60%);
+  filter: blur(40px);
+  pointer-events: none;
 }
 
-.welcome-bar p {
-  font-size: 14px;
-  color: #888;
-}
-
+.welcome-bar h2 { font-size: 22px; font-weight: 700; color: #fff; margin-bottom: 4px; position: relative; }
+.welcome-bar p { font-size: 14px; color: var(--text-3); position: relative; }
 .welcome-bar strong {
-  color: #667eea;
+  background: var(--gradient-brand);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .welcome-time {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #888;
+  color: var(--text-3);
   font-size: 14px;
+  position: relative;
 }
 
 /* 统计卡片 */
@@ -205,12 +215,6 @@ onMounted(async () => {
   padding: 20px;
   border-radius: 14px;
   cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.stat-card:hover {
-  background: rgba(255, 255, 255, 0.07);
-  transform: translateY(-2px);
 }
 
 .stat-icon {
@@ -223,44 +227,17 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
-.stat-info {
-  flex: 1;
-}
+.stat-info { flex: 1; }
+.stat-label { font-size: 13px; color: var(--text-3); margin-bottom: 4px; }
+.stat-value { font-size: 28px; font-weight: 800; color: #fff; }
 
-.stat-label {
-  font-size: 13px;
-  color: #888;
-  margin-bottom: 4px;
-}
-
-.stat-value {
-  font-size: 28px;
-  font-weight: 800;
-  color: #fff;
-}
-
-.stat-arrow {
-  color: #333;
-}
+.stat-arrow { color: var(--text-4); transition: transform 0.25s var(--ease-out); }
+.stat-card:hover .stat-arrow { transform: translateX(4px); color: var(--brand-1); }
 
 /* Section Header */
-.section-header {
-  margin-bottom: 20px;
-}
-
-.section-label {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 2px;
-  color: #667eea;
-}
-
-.section-title {
-  font-size: 20px;
-  font-weight: 700;
-  color: #fff;
-  margin-top: 4px;
-}
+.section-header { margin-bottom: 20px; }
+.section-label { font-size: 12px; font-weight: 600; letter-spacing: 2px; color: var(--brand-1); }
+.section-title { font-size: 20px; font-weight: 700; color: #fff; margin-top: 4px; }
 
 /* 快捷入口 */
 .quick-grid {
@@ -277,12 +254,6 @@ onMounted(async () => {
   padding: 24px;
   border-radius: 14px;
   cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.quick-card:hover {
-  background: rgba(255, 255, 255, 0.07);
-  transform: translateY(-2px);
 }
 
 .quick-icon {
@@ -295,17 +266,8 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
-.quick-info h4 {
-  font-size: 16px;
-  font-weight: 600;
-  color: #fff;
-  margin-bottom: 4px;
-}
-
-.quick-info p {
-  font-size: 13px;
-  color: #888;
-}
+.quick-info h4 { font-size: 16px; font-weight: 600; color: #fff; margin-bottom: 4px; }
+.quick-info p { font-size: 13px; color: var(--text-3); }
 
 /* 状态分布 */
 .status-bars {
@@ -316,9 +278,7 @@ onMounted(async () => {
 
 .status-bar-item {
   padding: 12px 20px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 10px;
+  border-radius: 12px;
 }
 
 .bar-header {
@@ -328,28 +288,21 @@ onMounted(async () => {
   margin-bottom: 8px;
 }
 
-.bar-label {
-  font-size: 14px;
-  color: #ccc;
-}
-
-.bar-count {
-  font-size: 16px;
-  font-weight: 700;
-  color: #fff;
-}
+.bar-label { font-size: 14px; color: var(--text-2); }
+.bar-count { font-size: 16px; font-weight: 700; color: #fff; }
 
 .bar-track {
-  height: 6px;
+  height: 8px;
   background: rgba(255, 255, 255, 0.05);
-  border-radius: 3px;
+  border-radius: 4px;
   overflow: hidden;
 }
 
 .bar-fill {
   height: 100%;
-  border-radius: 3px;
-  transition: width 0.5s ease;
+  border-radius: 4px;
+  transition: width 0.6s var(--ease-out);
+  box-shadow: 0 0 12px rgba(109, 124, 255, 0.2);
 }
 
 @media (max-width: 768px) {

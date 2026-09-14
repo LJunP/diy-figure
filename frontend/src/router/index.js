@@ -30,6 +30,12 @@ const routes = [
         meta: { title: '个人中心', requiresAuth: true }
       },
       {
+        path: 'notifications',
+        name: 'NotificationCenter',
+        component: () => import('@/views/NotificationCenter.vue'),
+        meta: { title: '消息中心', requiresAuth: true }
+      },
+      {
         path: 'series',
         name: 'SeriesList',
         component: () => import('@/views/series/SeriesList.vue'),
@@ -86,6 +92,25 @@ const routes = [
     meta: { title: '登录', requiresAuth: false }
   },
   {
+    path: '/verify-email',
+    name: 'VerifyEmail',
+    component: () => import('@/views/VerifyEmail.vue'),
+    meta: { title: '验证邮箱', requiresAuth: false }
+  },
+  {
+    path: '/reset-password',
+    name: 'ResetPassword',
+    component: () => import('@/views/ResetPassword.vue'),
+    meta: { title: '重置密码', requiresAuth: false }
+  },
+  {
+    // 用户协议与合规说明:未登录也应能查看,不能要求登录
+    path: '/terms',
+    name: 'Terms',
+    component: () => import('@/views/Terms.vue'),
+    meta: { title: '用户协议与合规说明', requiresAuth: false }
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'NotFound',
     component: () => import('@/views/NotFound.vue'),
@@ -139,7 +164,11 @@ router.beforeEach((to, from, next) => {
 
   const userStore = useUserStore()
 
-  // 需要登录但未登录
+  if (to.name === 'Login' && userStore.isLoggedIn) {
+    next(typeof to.query.redirect === 'string' ? to.query.redirect : '/')
+    return
+  }
+
   if (to.meta.requiresAuth && !userStore.isLoggedIn) {
     next({ name: 'Login', query: { redirect: to.fullPath } })
     return

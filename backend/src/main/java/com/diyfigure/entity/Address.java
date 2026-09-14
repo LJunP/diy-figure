@@ -43,6 +43,10 @@ public class Address {
     @Column(name = "detail", nullable = false, length = 500)
     private String detail;
 
+    @Builder.Default
+    @Column(name = "is_default", nullable = false)
+    private Boolean isDefault = false;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

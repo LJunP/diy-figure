@@ -38,7 +38,7 @@ public class OrderCanvas {
     @Column(name = "canvas_id", nullable = false)
     private Long canvasId;
 
-    /** 抽奖结果:SELECTED / NOT_SELECTED */
+    /** 抽奖结果:UNDECIDED / SELECTED / NOT_SELECTED */
     @Enumerated(EnumType.STRING)
     @Column(name = "lottery_result", nullable = false, length = 20)
     private LotteryResult lotteryResult;
@@ -55,4 +55,9 @@ public class OrderCanvas {
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
+
+    /** 乐观锁:防止同一未中签角色被并发重复补购 */
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 }

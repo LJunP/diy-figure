@@ -20,9 +20,13 @@ public class CanvasDetailResponse {
 
     private Long id;
     private Long seriesId;
+    /** 角色名称,用户在创建画布时填写 */
+    private String name;
     private String status;
     private List<String> conceptImageUrls;
     private String model3dUrl;
+    /** 3D 生成状态:NONE / PENDING / PROCESSING / SUCCESS / FAILED(前端据此轮询与重试) */
+    private String model3dStatus;
     private List<Map<String, Object>> aiConversation;
     private Boolean locked;
     private LocalDateTime createdAt;

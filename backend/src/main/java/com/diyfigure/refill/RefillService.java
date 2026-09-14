@@ -3,6 +3,7 @@ package com.diyfigure.refill;
 import com.diyfigure.common.enums.*;
 import com.diyfigure.common.exception.BusinessException;
 import com.diyfigure.common.response.ResultCode;
+import com.diyfigure.common.util.MoneyUtils;
 import com.diyfigure.entity.*;
 import com.diyfigure.order.service.OrderStateMachineService;
 import com.diyfigure.refill.dto.*;
@@ -109,13 +110,14 @@ public class RefillService {
                     return RefillableCanvasResponse.builder()
                             .orderCanvasId(oc.getId())
                             .canvasId(oc.getCanvasId())
-                            .canvasName(canvas != null ? "画布 " + canvas.getId() : "未知")
+                            .canvasName(canvasDisplayName(canvas))
                             .firstConceptImage(canvas != null && canvas.getConceptImageUrls() != null
                                     && !canvas.getConceptImageUrls().isEmpty()
                                     ? canvas.getConceptImageUrls().get(0) : null)
                             .lotteryResult("NOT_SELECTED")
                             .refillAvailableUntil(oc.getRefillAvailableUntil())
-                            .expired(expired || alreadyRefilled)
+                            .expired(expired)
+                            .alreadyRefilled(alreadyRefilled)
                             .refillPrice(refillPrice)
                             .build();
                 })
@@ -142,7 +144,11 @@ public class RefillService {
      */
     @Transactional
     public RefillOrderResponse createRefillOrder(Long parentOrderId, Long userId, RefillRequest request) {
-        OrderEntity parentOrder = getOrderByIdAndUserId(parentOrderId, userId);
+        OrderEntity parentOrder = orderRepository.findByIdForUpdate(parentOrderId)
+                .orElseThrow(() -> new BusinessException(ResultCode.ORDER_NOT_FOUND));
+        if (!parentOrder.getUserId().equals(userId)) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "无权操作此订单");
+        }
 
         // 1. 校验主订单状态
         if (parentOrder.getStatus() != OrderStatus.SHIPPED
@@ -179,10 +185,10 @@ public class RefillService {
             }
         }
 
-        // 5. 计算补购价格
+        // 5. 计算补购价格(尾款用减法,保证 定金 + 尾款 == 补购价)
         BigDecimal refillPrice = calculateRefillPrice(parentOrder);
-        BigDecimal depositAmount = refillPrice.divide(new BigDecimal("2"), 2, RoundingMode.HALF_UP);
-        BigDecimal balanceAmount = refillPrice.subtract(depositAmount);
+        BigDecimal depositAmount = MoneyUtils.half(refillPrice);
+        BigDecimal balanceAmount = MoneyUtils.remainder(refillPrice, depositAmount);
 
         // 6. 创建 REFILL 订单
         OrderEntity refillOrder = OrderEntity.builder()
@@ -215,7 +221,7 @@ public class RefillService {
                 .refillOrderId(refillOrder.getId())
                 .parentOrderId(parentOrderId)
                 .canvasId(request.getCanvasId())
-                .canvasName(canvas != null ? "画布 " + canvas.getId() : "未知")
+                .canvasName(canvasDisplayName(canvas))
                 .refillPrice(refillPrice)
                 .depositAmount(depositAmount)
                 .balanceAmount(balanceAmount)
@@ -251,10 +257,23 @@ public class RefillService {
         int selectedCount = series.getSpecTier().getSelectedCount();
 
         // (套餐总价 ÷ 中签数) × 1.3
-        BigDecimal unitPrice = parentOrder.getQuotedPrice()
-                .divide(new BigDecimal(selectedCount), 2, RoundingMode.HALF_UP);
-        return unitPrice.multiply(REFILL_PRICE_MULTIPLIER)
-                .setScale(2, RoundingMode.HALF_UP);
+        // 先乘后除并只做一次舍入,避免 "先舍入单价再乘倍数" 造成的二次舍入误差
+        return MoneyUtils.scaleThenMultiply(
+                parentOrder.getQuotedPrice(),
+                new BigDecimal(selectedCount),
+                REFILL_PRICE_MULTIPLIER);
+    }
+
+    /**
+     * 画布展示名;兼容 V5 迁移前未回填到名字的历史数据
+     */
+    private String canvasDisplayName(Canvas canvas) {
+        if (canvas == null) {
+            return "未知";
+        }
+        return (canvas.getName() == null || canvas.getName().isBlank())
+                ? "画布 " + canvas.getId()
+                : canvas.getName();
     }
 
     private OrderEntity getOrderByIdAndUserId(Long orderId, Long userId) {

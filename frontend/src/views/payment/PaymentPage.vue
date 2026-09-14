@@ -1,6 +1,6 @@
 <template>
   <div class="payment-page">
-    <div class="back-row">
+    <div class="back-row" v-reveal>
       <el-button text @click="goBack">
         <el-icon><ArrowLeft /></el-icon>
         返回订单
@@ -9,7 +9,8 @@
 
     <div v-loading="loading" class="payment-container">
       <!-- 支付信息 -->
-      <div v-if="payment" class="payment-card glass">
+      <div v-if="payment" class="payment-card glass-strong" v-reveal="{ delay: 0.05 }">
+        <div class="pay-glow"></div>
         <div class="pay-header">
           <h2 class="pay-title">支付 - 订单 #{{ orderId }}</h2>
           <el-tag :type="payment.status === 'SUCCESS' ? 'success' : payment.status === 'PENDING' ? 'warning' : 'danger'" effect="dark" size="large">
@@ -53,12 +54,12 @@
           </el-alert>
 
           <div class="qr-section">
-            <div class="qr-placeholder glass">
-              <el-icon :size="64" color="#667eea"><Wallet /></el-icon>
+            <div class="qr-placeholder glow-border">
+              <el-icon :size="64" color="#6d7cff"><Wallet /></el-icon>
               <p>{{ payment.channel === 'WECHAT' ? '微信支付' : '支付宝' }}</p>
               <p class="qr-amount">¥{{ payment.amount }}</p>
             </div>
-            <el-button type="primary" size="large" round :loading="paying" @click="handleSimulatePay" class="pay-btn">
+            <el-button size="large" round :loading="paying" @click="handleSimulatePay" class="pay-btn">
               模拟支付成功
             </el-button>
           </div>
@@ -75,18 +76,19 @@
       </div>
 
       <!-- 选择支付方式 -->
-      <div v-if="!payment" class="payment-card glass">
+      <div v-if="!payment" class="payment-card glass-strong" v-reveal="{ delay: 0.05 }">
+        <div class="pay-glow"></div>
         <h2 class="pay-title">选择支付方式</h2>
 
         <div class="channel-section">
           <span class="section-label">支付渠道</span>
           <div class="channel-cards">
-            <div class="channel-card" :class="{ active: selectedChannel === 'WECHAT' }" @click="selectedChannel = 'WECHAT'">
-              <el-icon :size="24" color="#43e97b"><ChatDotRound /></el-icon>
+            <div class="channel-card glow-border" :class="{ active: selectedChannel === 'WECHAT' }" @click="selectedChannel = 'WECHAT'">
+              <el-icon :size="24" color="#34d399"><ChatDotRound /></el-icon>
               <span>微信支付</span>
             </div>
-            <div class="channel-card" :class="{ active: selectedChannel === 'ALIPAY' }" @click="selectedChannel = 'ALIPAY'">
-              <el-icon :size="24" color="#4facfe"><Money /></el-icon>
+            <div class="channel-card glow-border" :class="{ active: selectedChannel === 'ALIPAY' }" @click="selectedChannel = 'ALIPAY'">
+              <el-icon :size="24" color="#22d3ee"><Money /></el-icon>
               <span>支付宝</span>
             </div>
           </div>
@@ -106,13 +108,13 @@
           </div>
         </div>
 
-        <el-button type="primary" size="large" round :loading="creating" @click="handleCreatePayment" class="create-btn">
+        <el-button size="large" round :loading="creating" @click="handleCreatePayment" class="create-btn">
           创建支付订单
         </el-button>
       </div>
 
       <!-- 支付历史 -->
-      <div v-if="paymentHistory.length > 0" class="history-card glass">
+      <div v-if="paymentHistory.length > 0" class="history-card glass-card" v-reveal>
         <h3 class="section-title">支付记录</h3>
         <el-table :data="paymentHistory" size="small">
           <el-table-column prop="id" label="支付单号" width="80" />
@@ -197,7 +199,7 @@ const handleCreatePayment = async () => {
     payment.value = res.data
     ElMessage.success('支付订单已创建')
   } catch (error) {
-    ElMessage.error('创建支付订单失败: ' + (error.response?.data?.message || error.message))
+    /* 拦截器已提示 */
   } finally {
     creating.value = false
   }
@@ -228,6 +230,10 @@ const goBack = () => router.push(`/orders/${orderId.value}`)
 onMounted(async () => {
   loading.value = true
   await Promise.all([loadOrderDetail(), loadPaymentHistory()])
+  const pending = (paymentHistory.value || []).find(row => row.status === 'PENDING')
+  if (pending) {
+    payment.value = { ...pending, paymentId: pending.paymentId || pending.id, mockMode: true }
+  }
   loading.value = false
 })
 </script>
@@ -236,38 +242,114 @@ onMounted(async () => {
 .payment-page { max-width: 800px; margin: 0 auto; padding: 32px; }
 .back-row { margin-bottom: 16px; }
 
-.payment-card { padding: 32px; border-radius: 16px; margin-bottom: 20px; }
-.pay-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
-.pay-title { font-size: 22px; font-weight: 700; color: #fff; }
+.payment-card { padding: 32px; border-radius: var(--radius-lg); margin-bottom: 20px; position: relative; overflow: hidden; }
 
-.pay-info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.pay-glow {
+  position: absolute;
+  top: -40%; right: -10%;
+  width: 50%; height: 80%;
+  background: radial-gradient(circle, rgba(109, 124, 255, 0.12), transparent 60%);
+  filter: blur(40px);
+  pointer-events: none;
+}
+
+.pay-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; position: relative; }
+.pay-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #fff;
+  position: relative;
+}
+
+.pay-info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; position: relative; }
 .pay-info-item { display: flex; flex-direction: column; gap: 4px; }
-.pi-label { font-size: 12px; color: #666; }
-.pi-value { font-size: 15px; color: #ccc; }
-.pi-value.amount { font-size: 24px; font-weight: 800; color: #f5576c; }
+.pi-label { font-size: 12px; color: var(--text-4); }
+.pi-value { font-size: 15px; color: var(--text-1); }
+.pi-value.amount {
+  font-size: 26px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #ec4899, #a855f7);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
 
-.mock-pay-section { margin-top: 24px; }
+.mock-pay-section { margin-top: 24px; position: relative; }
 .qr-section { display: flex; flex-direction: column; align-items: center; padding: 32px 0; gap: 24px; }
-.qr-placeholder { width: 200px; height: 200px; border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border: 2px dashed rgba(255,255,255,0.15); }
-.qr-placeholder p { color: #888; font-size: 14px; }
-.qr-amount { font-size: 24px !important; font-weight: 800; color: #f5576c !important; }
-.pay-btn { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; min-width: 200px; }
+.qr-placeholder {
+  width: 200px; height: 200px;
+  border-radius: var(--radius-lg);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px;
+}
+.qr-placeholder p { color: var(--text-3); font-size: 14px; }
+.qr-amount {
+  font-size: 24px !important;
+  font-weight: 800;
+  background: linear-gradient(135deg, #ec4899, #a855f7);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.pay-btn {
+  background: var(--gradient-brand) !important;
+  border: none !important;
+  color: #fff !important;
+  min-width: 220px;
+  box-shadow: 0 4px 20px rgba(109, 124, 255, 0.35);
+}
 
 .success-section { margin-top: 24px; }
 
-.channel-section { margin-bottom: 24px; }
-.section-label { font-size: 12px; font-weight: 600; letter-spacing: 2px; color: #667eea; margin-bottom: 12px; display: block; }
+.channel-section { margin-bottom: 24px; position: relative; }
+.section-label { font-size: 12px; font-weight: 600; letter-spacing: 2px; color: var(--brand-1); margin-bottom: 12px; display: block; }
 .channel-cards { display: flex; gap: 16px; }
-.channel-card { display: flex; align-items: center; gap: 8px; padding: 16px 24px; border: 2px solid rgba(255,255,255,0.08); border-radius: 12px; cursor: pointer; transition: all 0.2s; color: #ccc; font-size: 15px; }
-.channel-card:hover { border-color: rgba(102,126,234,0.3); background: rgba(255,255,255,0.03); }
-.channel-card.active { border-color: #667eea; background: rgba(102,126,234,0.08); color: #fff; }
+.channel-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 24px;
+  cursor: pointer;
+  color: var(--text-2);
+  font-size: 15px;
+  transition: all 0.3s var(--ease-out);
+}
+.channel-card:hover { transform: translateY(-2px); }
+.channel-card.active {
+  border-color: rgba(109, 124, 255, 0.5) !important;
+  background: rgba(109, 124, 255, 0.1) !important;
+  color: #fff;
+}
 
 .type-display { display: flex; gap: 12px; }
-.type-card { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; border: 2px solid #667eea; border-radius: 12px; background: rgba(102,126,234,0.08); color: #fff; width: 100%; }
-.type-amount { font-size: 20px; font-weight: 800; color: #f5576c; }
+.type-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border: 2px solid var(--brand-1);
+  border-radius: 12px;
+  background: rgba(109, 124, 255, 0.08);
+  color: #fff;
+  width: 100%;
+}
+.type-amount {
+  font-size: 20px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #ec4899, #a855f7);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
 
-.create-btn { width: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; }
+.create-btn {
+  width: 100%;
+  background: var(--gradient-brand) !important;
+  border: none !important;
+  color: #fff !important;
+  box-shadow: 0 4px 20px rgba(109, 124, 255, 0.35);
+}
 
-.history-card { padding: 24px; border-radius: 16px; }
+.history-card { padding: 24px; border-radius: var(--radius-lg); }
 .section-title { font-size: 16px; font-weight: 600; color: #fff; margin-bottom: 16px; }
 </style>
